@@ -4217,7 +4217,7 @@ skip:
     } else if (*p_icm != NUL &&  pat != NULL) {
       if (pre_src_id == 0) {
         // Get a unique new src_id, saved in a static
-        pre_src_id = (int)nvim_create_namespace((String)STRING_INIT);
+        pre_src_id = (int)nvim_create_namespace((String)STRING_BLOB_INIT);
       }
       if (pre_hl_id == 0) {
         pre_hl_id = syn_check_group((char_u *)S_LEN("Substitute"));

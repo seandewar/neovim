@@ -1653,6 +1653,13 @@ static ShaDaWriteResult shada_pack_entry(msgpack_packer *const packer,
       break;
     }
     case kSDItemVariable: {
+      if (entry.data.global_var.value.v_type == VAR_BLOB) {
+        // Blobs need to be differentiated from Strings, as they are both packed
+        // as msgpack BIN strings
+        list_T *const list = tv_list_alloc(1);
+        tv_list_append_number(list, VAR_TYPE_BLOB);
+        entry.data.global_var.additional_elements = list;
+      }
       const size_t arr_size = 2 + (size_t)(
           tv_list_len(entry.data.global_var.additional_elements));
       msgpack_pack_array(spacker, arr_size);
@@ -3937,15 +3944,28 @@ shada_read_next_item_start:
       entry->data.global_var.name =
           xmemdupz(unpacked.data.via.array.ptr[0].via.bin.ptr,
                    unpacked.data.via.array.ptr[0].via.bin.size);
-      if (msgpack_to_vim(unpacked.data.via.array.ptr[1],
-                         &(entry->data.global_var.value)) == FAIL) {
+      SET_ADDITIONAL_ELEMENTS(unpacked.data.via.array, 2,
+                              entry->data.global_var.additional_elements,
+                              "variable");
+      if (tv_list_len(entry->data.global_var.additional_elements) != 0) {
+        // Additional elements for globals is used only to differentiate Blobs
+        // from Strings for now, so we don't need to check its contents unless
+        // it's given another use in the future
+        const msgpack_object_bin *const bin
+            = &unpacked.data.via.array.ptr[1].via.bin;
+        blob_T *const blob = tv_blob_alloc();
+        if (bin->size != 0) {
+          ga_grow(&blob->bv_ga, (int)bin->size);
+          blob->bv_ga.ga_len = (int)bin->size;
+          memcpy(blob->bv_ga.ga_data, bin->ptr, (size_t)bin->size);
+        }
+        tv_blob_set_ret(&entry->data.global_var.value, blob);
+      } else if (msgpack_to_vim(unpacked.data.via.array.ptr[1],
+                                &(entry->data.global_var.value)) == FAIL) {
         emsgf(_(READERR("variable", "has value that cannot "
                         "be converted to the VimL value")), initial_fpos);
         goto shada_read_next_item_error;
       }
-      SET_ADDITIONAL_ELEMENTS(unpacked.data.via.array, 2,
-                              entry->data.global_var.additional_elements,
-                              "variable");
       break;
     }
     case kSDItemSubString: {

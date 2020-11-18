@@ -8,8 +8,8 @@
 #include "nvim/func_attr.h"
 #include "nvim/types.h"
 
-#define ARRAY_DICT_INIT {.size = 0, .capacity = 0, .items = NULL}
-#define STRING_INIT {.data = NULL, .size = 0}
+#define ARRAY_DICT_INIT { .size = 0, .capacity = 0, .items = NULL }
+#define STRING_BLOB_INIT { .data = NULL, .size = 0 }
 #define OBJECT_INIT { .type = kObjectTypeNil }
 #define ERROR_INIT { .type = kErrorTypeNone, .msg = NULL }
 #define REMOTE_TYPE(type) typedef handle_T type
@@ -78,6 +78,11 @@ typedef struct {
   size_t size;
 } String;
 
+typedef struct {
+  char_u *data;
+  size_t size;
+} Blob;
+
 REMOTE_TYPE(Buffer);
 REMOTE_TYPE(Window);
 REMOTE_TYPE(Tabpage);
@@ -102,6 +107,7 @@ typedef enum {
   kObjectTypeInteger,
   kObjectTypeFloat,
   kObjectTypeString,
+  kObjectTypeBlob,
   kObjectTypeArray,
   kObjectTypeDictionary,
   kObjectTypeLuaRef,
@@ -118,6 +124,7 @@ struct object {
     Integer integer;
     Float floating;
     String string;
+    Blob blob;
     Array array;
     Dictionary dictionary;
     LuaRef luaref;

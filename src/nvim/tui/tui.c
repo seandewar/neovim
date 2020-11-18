@@ -335,7 +335,7 @@ static void terminfo_stop(UI *ui)
 {
   TUIData *data = ui->data;
   // Destroy output stuff
-  tui_mode_change(ui, (String)STRING_INIT, SHAPE_IDX_N);
+  tui_mode_change(ui, (String)STRING_BLOB_INIT, SHAPE_IDX_N);
   tui_mouse_off(ui);
   unibi_out(ui, unibi_exit_attribute_mode);
   // Reset cursor to normal before exiting alternate screen.

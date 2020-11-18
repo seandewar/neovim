@@ -251,6 +251,7 @@ bool msgpack_rpc_to_object(const msgpack_object *const obj, Object *const arg)
           case kObjectTypeInteger:
           case kObjectTypeFloat:
           case kObjectTypeString:
+          case kObjectTypeBlob:
           case kObjectTypeArray:
           case kObjectTypeDictionary:
           case kObjectTypeLuaRef: {
@@ -360,6 +361,15 @@ void msgpack_rpc_from_string(const String result, msgpack_packer *res)
   }
 }
 
+void msgpack_rpc_from_blob(const Blob result, msgpack_packer *res)
+  FUNC_ATTR_NONNULL_ARG(2)
+{
+  msgpack_pack_bin(res, result.size);
+  if (result.size > 0) {
+    msgpack_pack_bin_body(res, result.data, result.size);
+  }
+}
+
 typedef struct {
   const Object *aobj;
   bool container;
@@ -405,6 +415,10 @@ void msgpack_rpc_from_object(const Object result, msgpack_packer *const res)
       }
       case kObjectTypeString: {
         msgpack_rpc_from_string(cur.aobj->data.string, res);
+        break;
+      }
+      case kObjectTypeBlob: {
+        msgpack_rpc_from_blob(cur.aobj->data.blob, res);
         break;
       }
       case kObjectTypeBuffer: {

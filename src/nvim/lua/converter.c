@@ -480,6 +480,14 @@ static bool typval_conv_special = false;
 #define TYPVAL_ENCODE_CONV_EXT_STRING(tv, str, len, type) \
     TYPVAL_ENCODE_CONV_NIL(tv)
 
+// TODO(seandewar): support a better blob interface for Lua
+#define TYPVAL_ENCODE_CONV_BLOB(tv, blob, len) \
+    do { \
+      const blob_T *const blob_ = (blob); \
+      lua_pushlstring(lstate, blob_ ? (const char *)blob_->bv_ga.ga_data : "", \
+                      (size_t)(len)); \
+    } while (0)
+
 #define TYPVAL_ENCODE_CONV_FUNC_START(tv, fun) \
     do { \
       TYPVAL_ENCODE_CONV_NIL(tv); \
@@ -578,6 +586,7 @@ static bool typval_conv_special = false;
 #undef TYPVAL_ENCODE_CONV_STRING
 #undef TYPVAL_ENCODE_CONV_STR_STRING
 #undef TYPVAL_ENCODE_CONV_EXT_STRING
+#undef TYPVAL_ENCODE_CONV_BLOB
 #undef TYPVAL_ENCODE_CONV_NUMBER
 #undef TYPVAL_ENCODE_CONV_FLOAT
 #undef TYPVAL_ENCODE_CONV_FUNC_START
@@ -684,6 +693,16 @@ void nlua_push_String(lua_State *lstate, const String s, bool special)
   FUNC_ATTR_NONNULL_ALL
 {
   lua_pushlstring(lstate, s.data, s.size);
+}
+
+/// Convert given Blob to lua string
+///
+/// Leaves converted string on top of the stack.
+void nlua_push_Blob(lua_State *lstate, const Blob b, bool special)
+  FUNC_ATTR_NONNULL_ALL
+{
+  // TODO(seandewar): support a better blob interface for Lua
+  lua_pushlstring(lstate, b.data != NULL ? (const char *)b.data : "", b.size);
 }
 
 /// Convert given Integer to lua number
@@ -797,6 +816,7 @@ void nlua_push_Object(lua_State *lstate, const Object obj, bool special)
     ADD_TYPE(Integer,      integer)
     ADD_TYPE(Float,        floating)
     ADD_TYPE(String,       string)
+    ADD_TYPE(Blob,         blob)
     ADD_TYPE(Array,        array)
     ADD_TYPE(Dictionary,   dictionary)
 #undef ADD_TYPE
@@ -1314,6 +1334,14 @@ void nlua_init_types(lua_State *const lstate)
   lua_rawset(lstate, -3);
   lua_pushnumber(lstate, (lua_Number)kObjectTypeDictionary);
   LUA_PUSH_STATIC_STRING(lstate, "dictionary");
+  lua_rawset(lstate, -3);
+
+  // TODO(seandewar): implement the decoding for this
+  LUA_PUSH_STATIC_STRING(lstate, "blob");
+  lua_pushnumber(lstate, (lua_Number)kObjectTypeBlob);
+  lua_rawset(lstate, -3);
+  lua_pushnumber(lstate, (lua_Number)kObjectTypeBlob);
+  LUA_PUSH_STATIC_STRING(lstate, "blob");
   lua_rawset(lstate, -3);
 
   lua_rawset(lstate, -3);

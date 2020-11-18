@@ -32,6 +32,10 @@
 
 #define CSTR_TO_OBJ(s) STRING_OBJ(cstr_to_string(s))
 
+#define BLOB_OBJ(b) ((Object) { \
+    .type = kObjectTypeBlob, \
+    .data.blob = b })
+
 #define BUFFER_OBJ(s) ((Object) { \
     .type = kObjectTypeBuffer, \
     .data.integer = s })

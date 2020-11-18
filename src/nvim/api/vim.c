@@ -130,7 +130,7 @@ theend:
   if (output) {
     ga_clear(&capture_local);
   }
-  return (String)STRING_INIT;
+  return (String)STRING_BLOB_INIT;
 }
 
 /// Executes an ex-command.
@@ -2147,7 +2147,7 @@ Dictionary nvim_parse_expression(String expr, String flags, Boolean highlight,
     if (east.err.arg == NULL) {
       err_dict.items[1] = (KeyValuePair) {
         .key = STATIC_CSTR_TO_STRING("arg"),
-        .value = STRING_OBJ(STRING_INIT),
+        .value = STRING_OBJ(STRING_BLOB_INIT),
       };
     } else {
       err_dict.items[1] = (KeyValuePair) {
@@ -2385,7 +2385,7 @@ Dictionary nvim_parse_expression(String expr, String flags, Boolean highlight,
               .key = STATIC_CSTR_TO_STRING("augmentation"),
               .value = STRING_OBJ(
                   asgn_type == kExprAsgnPlain
-                  ? (String)STRING_INIT
+                  ? (String)STRING_BLOB_INIT
                   : cstr_to_string(expr_asgn_type_tab[asgn_type])),
             };
             break;

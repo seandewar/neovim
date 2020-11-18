@@ -977,7 +977,7 @@ void nvim_buf_set_option(uint64_t channel_id, Buffer buffer,
 String nvim_buf_get_name(Buffer buffer, Error *err)
   FUNC_API_SINCE(1)
 {
-  String rv = STRING_INIT;
+  String rv = STRING_BLOB_INIT;
   buf_T *buf = find_buffer_by_handle(buffer, err);
 
   if (!buf || buf->b_ffname == NULL) {

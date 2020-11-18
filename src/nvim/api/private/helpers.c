@@ -443,6 +443,17 @@ void set_option_to(uint64_t channel_id, void *to, int type,
 #define TYPVAL_ENCODE_CONV_EXT_STRING(tv, str, len, type) \
     TYPVAL_ENCODE_CONV_NIL(tv)
 
+#define TYPVAL_ENCODE_CONV_BLOB(tv, blob, len) \
+    do { \
+      const size_t len_ = (size_t)(len); \
+      const blob_T *const blob_ = (blob); \
+      assert(len_ == 0 || blob_ != NULL); \
+      kv_push(edata->stack, BLOB_OBJ(((Blob) { \
+        .data = len_ != 0 ? xmemdup(blob_->bv_ga.ga_data, len_) : NULL, \
+        .size = len_ \
+      }))); \
+    } while (0)
+
 #define TYPVAL_ENCODE_CONV_FUNC_START(tv, fun) \
     do { \
       TYPVAL_ENCODE_CONV_NIL(tv); \
@@ -583,6 +594,7 @@ static inline void typval_encode_dict_end(EncodedData *const edata)
 #undef TYPVAL_ENCODE_CONV_STRING
 #undef TYPVAL_ENCODE_CONV_STR_STRING
 #undef TYPVAL_ENCODE_CONV_EXT_STRING
+#undef TYPVAL_ENCODE_CONV_BLOB
 #undef TYPVAL_ENCODE_CONV_NUMBER
 #undef TYPVAL_ENCODE_CONV_FLOAT
 #undef TYPVAL_ENCODE_CONV_FUNC_START
@@ -696,7 +708,7 @@ String cchar_to_string(char c)
 String cstr_to_string(const char *str)
 {
     if (str == NULL) {
-      return (String)STRING_INIT;
+      return (String)STRING_BLOB_INIT;
     }
 
     size_t len = strlen(str);
@@ -738,7 +750,7 @@ String cstrn_to_string(const char *str, size_t maxsize)
 String cstr_as_string(char *str) FUNC_ATTR_PURE
 {
   if (str == NULL) {
-    return (String)STRING_INIT;
+    return (String)STRING_BLOB_INIT;
   }
   return (String){ .data = str, .size = strlen(str) };
 }
@@ -790,7 +802,7 @@ Array string_to_array(const String input, bool crlf)
     // If line ends at end-of-buffer, add empty final item.
     // This is "readfile()-style", see also ":help channel-lines".
     if (i + 1 == input.size && (*end == NL || (crlf && *end == CAR))) {
-      ADD(ret, STRING_OBJ(STRING_INIT));
+      ADD(ret, STRING_OBJ(STRING_BLOB_INIT));
     }
   }
 
@@ -1111,6 +1123,20 @@ bool object_to_vim(Object obj, typval_T *tv, Error *err)
       }
       break;
 
+    case kObjectTypeBlob: {
+      blob_T *const blob = tv_blob_alloc();
+
+      if (obj.data.blob.data != NULL) {
+        const int len = (int)obj.data.blob.size;
+        ga_grow(&blob->bv_ga, len);
+        blob->bv_ga.ga_len = len;
+        memcpy(blob->bv_ga.ga_data, obj.data.blob.data, (size_t)len);
+      }
+
+      tv_blob_set_ret(tv, blob);
+      break;
+    }
+
     case kObjectTypeArray: {
       list_T *const list = tv_list_alloc((ptrdiff_t)obj.data.array.size);
 
@@ -1180,6 +1206,13 @@ void api_free_string(String value)
   xfree(value.data);
 }
 
+void api_free_blob(Blob value)
+{
+  if (value.data != NULL) {
+    xfree(value.data);
+  }
+}
+
 void api_free_object(Object value)
 {
   switch (value.type) {
@@ -1194,6 +1227,10 @@ void api_free_object(Object value)
 
     case kObjectTypeString:
       api_free_string(value.data.string);
+      break;
+
+    case kObjectTypeBlob:
+      api_free_blob(value.data.blob);
       break;
 
     case kObjectTypeArray:
@@ -1345,7 +1382,16 @@ String copy_string(String str)
   if (str.data != NULL) {
     return (String){ .data = xmemdupz(str.data, str.size), .size = str.size };
   } else {
-    return (String)STRING_INIT;
+    return (String)STRING_BLOB_INIT;
+  }
+}
+
+Blob copy_blob(Blob blob)
+{
+  if (blob.data != NULL) {
+    return (Blob){ .data = xmemdup(blob.data, blob.size), .size = blob.size };
+  } else {
+    return (Blob)STRING_BLOB_INIT;
   }
 }
 
@@ -1383,6 +1429,9 @@ Object copy_object(Object obj)
 
     case kObjectTypeString:
       return STRING_OBJ(copy_string(obj.data.string));
+
+    case kObjectTypeBlob:
+      return BLOB_OBJ(copy_blob(obj.data.blob));
 
     case kObjectTypeArray:
       return ARRAY_OBJ(copy_array(obj.data.array));

@@ -2251,6 +2251,7 @@ char_u *get_lval(char_u *const name, typval_T *const rettv,
       }
       lp->ll_blob = lp->ll_tv->vval.v_blob;
       lp->ll_tv = NULL;
+      break;
     } else {
       // Get the number and item for the only or first index of the List.
       if (empty1) {

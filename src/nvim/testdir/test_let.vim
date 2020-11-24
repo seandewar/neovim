@@ -174,11 +174,11 @@ func Test_let_termcap()
     let &t_k1 = old_t_k1
   endif
 
-  call assert_fails('let x = &t_xx', 'E113')
+  call assert_fails('let x = &t_xx', 'E15')
   let &t_xx = "yes"
   call assert_equal("yes", &t_xx)
   let &t_xx = ""
-  call assert_fails('let x = &t_xx', 'E113')
+  call assert_fails('let x = &t_xx', 'E15')
 endfunc
 
 func Test_let_option_error()

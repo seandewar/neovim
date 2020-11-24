@@ -500,6 +500,7 @@ Test functions:
   test_alloc_fail()
   test_autochdir()
   test_disable_char_avail()
+  test_null_blob()
   test_null_channel()
   test_null_dict()
   test_null_job()

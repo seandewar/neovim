@@ -137,4 +137,22 @@ func Test_curly_assignment()
   unlet g:gvar
 endfunc
 
+func Test_readfile_binary()
+  new
+  call setline(1, ['one', 'two', 'three'])
+  setlocal ff=dos
+  write XReadfile
+  let lines = readfile('XReadfile')
+  call assert_equal(['one', 'two', 'three'], lines)
+  let lines = readfile('XReadfile', '', 2)
+  call assert_equal(['one', 'two'], lines)
+  let lines = readfile('XReadfile', 'b')
+  call assert_equal(["one\r", "two\r", "three\r", ""], lines)
+  let lines = readfile('XReadfile', 'b', 2)
+  call assert_equal(["one\r", "two\r"], lines)
+
+  bwipe!
+  call delete('XReadfile')
+endfunc
+
 " vim: shiftwidth=2 sts=2 expandtab

@@ -2586,6 +2586,8 @@ void *eval_for_line(const char_u *arg, bool *errp, char_u **nextcmdp, int skip)
         if (b == NULL) {
           tv_clear(&tv);
         } else {
+          // No need to increment the refcount, it's already set for
+          // the blob being used in "tv".
           fi->fi_blob = b;
           fi->fi_bi = 0;
         }
@@ -2648,6 +2650,9 @@ void free_for_info(void *fi_void)
   if (fi != NULL && fi->fi_list != NULL) {
     tv_list_watch_remove(fi->fi_list, &fi->fi_lw);
     tv_list_unref(fi->fi_list);
+  }
+  if (fi != NULL && fi->fi_blob != NULL) {
+    tv_blob_unref(fi->fi_blob);
   }
   xfree(fi);
 }
@@ -4191,9 +4196,12 @@ static int eval7(
       char_u *bp;
       for (bp = *arg + 2; ascii_isxdigit(bp[0]); bp += 2) {
         if (!ascii_isxdigit(bp[1])) {
-          EMSG(_("E973: Blob literal should have an even number of hex "
-                 "characters"));
-          xfree(blob);
+          if (blob != NULL) {
+            EMSG(_("E973: Blob literal should have an even number of hex "
+                   "characters"));
+            ga_clear(&blob->bv_ga);
+            XFREE_CLEAR(blob);
+          }
           ret = FAIL;
           break;
         }

@@ -9637,9 +9637,6 @@ int var_item_copy(const vimconv_T *const conv,
       }
     }
     break;
-  case VAR_BLOB:
-    tv_copy(from, to);
-    break;
   case VAR_LIST:
     to->v_type = VAR_LIST;
     to->v_lock = VAR_UNLOCKED;
@@ -9654,6 +9651,22 @@ int var_item_copy(const vimconv_T *const conv,
     }
     if (to->vval.v_list == NULL && from->vval.v_list != NULL) {
       ret = FAIL;
+    }
+    break;
+  case VAR_BLOB:
+    to->v_type = VAR_BLOB;
+    if (from->vval.v_blob == NULL) {
+      to->vval.v_blob = NULL;
+    } else {
+      tv_blob_alloc_ret(to);
+      const int len = from->vval.v_blob->bv_ga.ga_len;
+
+      // TODO(seandewar): vim-patch:8.1.0756 uses vim_memsave(), which uses
+      //                  memmove() over memcpy(), but are overlaps even
+      //                  possible here?
+      to->vval.v_blob->bv_ga.ga_data
+          = xmemdup(from->vval.v_blob->bv_ga.ga_data, (size_t)len);
+      to->vval.v_blob->bv_ga.ga_len = len;
     }
     break;
   case VAR_DICT:

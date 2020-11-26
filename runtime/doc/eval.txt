@@ -3520,9 +3520,10 @@ environ()						*environ()*
 
 empty({expr})						*empty()*
 		Return the Number 1 if {expr} is empty, zero otherwise.
-		A |List| or |Dictionary| is empty when it does not have any
-		items.  A Number is empty when its value is zero.  Special
-		variable is empty when it is |v:false| or |v:null|.
+		- A |List| or |Dictionary| is empty when it does not have any
+		  items.
+		- A Number and Float is empty when its value is zero.
+		- |v:false| and |v:null| are empty, |v:true| is not.
 
 escape({string}, {chars})				*escape()*
 		Escape the characters in {chars} that occur in {string} with a

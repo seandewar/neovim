@@ -712,7 +712,7 @@ describe('lua stdlib', function()
     eq({NIL, NIL}, exec_lua([[return vim.fn.Nilly()]]))
 
     -- error handling
-    eq({false, 'Vim:E714: List required'}, exec_lua([[return {pcall(vim.fn.add, "aa", "bb")}]]))
+    eq({false, 'Vim:E897: List or Blob required'}, exec_lua([[return {pcall(vim.fn.add, "aa", "bb")}]]))
   end)
 
   it('vim.rpcrequest and vim.rpcnotify', function()

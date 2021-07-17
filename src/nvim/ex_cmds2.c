@@ -52,6 +52,7 @@
 #include "nvim/os/os.h"
 #include "nvim/os/shell.h"
 #include "nvim/os/fs_defs.h"
+#include "nvim/api/private/handle.h"
 #include "nvim/api/private/helpers.h"
 #include "nvim/api/private/defs.h"
 #include "nvim/lua/executor.h"
@@ -2636,6 +2637,8 @@ static void cmd_source(char_u *fname, exarg_T *eap)
 }
 
 typedef struct {
+  const handle_T handle;
+  const varnumber_T changedtick;
   linenr_T curr_lnum;
   const linenr_T final_lnum;
 } GetBufferLineCookie;
@@ -2651,7 +2654,13 @@ static char_u *get_buffer_line(int c, void *cookie, int indent, bool do_concat)
   if (p->curr_lnum > p->final_lnum) {
     return NULL;
   }
-  char_u *curr_line = ml_get(p->curr_lnum);
+  buf_T *const buf = handle_get_buffer(p->handle);
+  if (buf == NULL || buf->b_ml.ml_mfp == NULL
+      || p->changedtick != buf_get_changedtick(buf)) {
+    EMSG(_("E???: Buffer was modified whilst being sourced!"));
+    return NULL;
+  }
+  char_u *curr_line = ml_get_buf(buf, p->curr_lnum, false);
   p->curr_lnum++;
   return (char_u *)xstrdup((const char *)curr_line);
 }
@@ -2659,11 +2668,16 @@ static char_u *get_buffer_line(int c, void *cookie, int indent, bool do_concat)
 static void cmd_source_buffer(const exarg_T *eap)
   FUNC_ATTR_NONNULL_ALL
 {
+  if (curbuf == NULL) {
+    return;
+  }
   GetBufferLineCookie cookie = {
+      .handle = curbuf->handle,
+      .changedtick = buf_get_changedtick(curbuf),
       .curr_lnum = eap->line1,
       .final_lnum = eap->line2,
   };
-  if (curbuf != NULL && curbuf->b_fname
+  if (curbuf->b_fname
       && path_with_extension((const char *)curbuf->b_fname, "lua")) {
     nlua_source_using_linegetter(get_buffer_line, (void *)&cookie,
                                  ":source (no file)");

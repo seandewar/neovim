@@ -4,10 +4,12 @@ local insert = helpers.insert
 local eq = helpers.eq
 local clear = helpers.clear
 local meths = helpers.meths
+local funcs = helpers.funcs
 local feed = helpers.feed
 local feed_command = helpers.feed_command
 local write_file = helpers.write_file
 local exec = helpers.exec
+local exc_exec = helpers.exc_exec
 local eval = helpers.eval
 local exec_capture = helpers.exec_capture
 local neq = helpers.neq
@@ -38,6 +40,24 @@ describe(':source', function()
     feed('ggjVG')
     feed_command(':source')
     eq('4', meths.exec('echo a', true))
+  end)
+
+  it('errors if current buffer was modified while sourcing it', function()
+    insert [[
+      bw!
+      let a = 123
+    ]]
+    eq('Vim:E???: Buffer was modified whilst being sourced!',
+      exc_exec('source'))
+    eq(0, funcs.exists('a'))
+
+    insert [[
+      norm ggVGd
+      let a = 321
+    ]]
+    eq('Vim:E???: Buffer was modified whilst being sourced!',
+      exc_exec('source'))
+    eq(0, funcs.exists('a'))
   end)
 
   it('multiline heredoc command', function()

@@ -579,6 +579,10 @@ bool close_buffer(win_T *win, buf_T *buf, int action, bool abort_if_last)
     return false;
   }
 
+  // Disable buffer-updates for the current buffer.
+  // No need to check `unload_buf`: in that case the function returned above.
+  buf_updates_unload(buf, false);
+
   if (win != NULL  // Avoid bogus clang warning.
       && win_valid_any_tab(win)
       && win->w_buffer == buf) {
@@ -593,10 +597,6 @@ bool close_buffer(win_T *win, buf_T *buf, int action, bool abort_if_last)
 
   // Change directories when the 'acd' option is set.
   do_autochdir();
-
-  // Disable buffer-updates for the current buffer.
-  // No need to check `unload_buf`: in that case the function returned above.
-  buf_updates_unload(buf, false);
 
   /*
    * Remove the buffer from the list.

@@ -271,6 +271,20 @@ describe('lua buffer event callbacks: on_lines', function()
     helpers.assert_alive()
   end)
 
+  it('does not SEGFAULT in on_detach after :bdelete', function()
+    exec_lua [[
+      local buf = vim.api.nvim_create_buf(false, false)
+      vim.api.nvim_buf_attach(buf, false, {
+        on_detach = function(_, buf)
+          vim.fn.win_findbuf(buf)
+          vim.fn.winbufnr(0)
+        end
+      })
+      vim.cmd "bdelete"
+    ]]
+    helpers.assert_alive()
+  end)
+
   it('#12718 lnume', function()
     meths.buf_set_lines(0, 0, -1, true, {'1', '2', '3'})
     exec_lua([[

@@ -2979,7 +2979,6 @@ static const char *const str_errors[] = {
   [VAR_FUNC]=N_(FUNC_ERROR),
   [VAR_LIST]=N_("E730: using List as a String"),
   [VAR_DICT]=N_("E731: using Dictionary as a String"),
-  [VAR_FLOAT]=((const char *)e_float_as_string),
   [VAR_BLOB]=N_("E976: using Blob as a String"),
   [VAR_UNKNOWN]=N_("E908: using an invalid value as a String"),
 };
@@ -3002,12 +3001,12 @@ bool tv_check_str(const typval_T *const tv)
   case VAR_BOOL:
   case VAR_SPECIAL:
   case VAR_STRING:
+  case VAR_FLOAT:
     return true;
   case VAR_PARTIAL:
   case VAR_FUNC:
   case VAR_LIST:
   case VAR_DICT:
-  case VAR_FLOAT:
   case VAR_BLOB:
   case VAR_UNKNOWN:
     EMSG(_(str_errors[tv->v_type]));
@@ -3176,8 +3175,8 @@ const char *tv_get_string_buf_chk(const typval_T *const tv, char *const buf)
 ///              will be written to buf and buf will be returned.
 ///
 ///              Buffer must have NUMBUFLEN size.
-/// @param  strict  If true, disallow number to string conversions: throw an
-///                 error and return NULL instead.
+/// @param  strict  If true, disallow number or float to string conversions:
+///                 throw an error and return NULL instead.
 ///
 /// @return Object value if it is VAR_STRING object, number converted to
 ///         a string for VAR_NUMBER, v: variable name for VAR_SPECIAL or NULL.
@@ -3193,6 +3192,14 @@ const char *tv_get_string_buf_chk_strict(const typval_T *const tv, char *const b
     }
     snprintf(buf, NUMBUFLEN, "%" PRIdVARNUMBER, tv->vval.v_number);  // -V576
     return buf;
+  case VAR_FLOAT: {
+    if (strict) {
+      EMSG(_(e_float_as_string));
+      break;
+    }
+    vim_snprintf(buf, NUMBUFLEN, "%g", tv->vval.v_float);
+    return buf;
+  }
   case VAR_STRING:
     if (tv->vval.v_string != NULL) {
       return (const char *)tv->vval.v_string;
@@ -3208,7 +3215,6 @@ const char *tv_get_string_buf_chk_strict(const typval_T *const tv, char *const b
   case VAR_FUNC:
   case VAR_LIST:
   case VAR_DICT:
-  case VAR_FLOAT:
   case VAR_BLOB:
   case VAR_UNKNOWN:
     EMSG(_(str_errors[tv->v_type]));
@@ -3258,7 +3264,7 @@ const char *tv_get_string(const typval_T *const tv)
   return tv_get_string_buf(tv, mybuf);
 }
 
-/// Like @ref tv_get_string with `strict = true` (disallow number to string conversions).
+/// Like @ref tv_get_string with `strict = true` (disallow number or float to string conversions).
 const char *tv_get_string_strict(const typval_T *const tv)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET FUNC_ATTR_WARN_UNUSED_RESULT
 {

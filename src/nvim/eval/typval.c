@@ -47,6 +47,8 @@ bool tv_in_free_unref_items = false;
 
 const char *const tv_empty_string = "";
 
+static char e_using_number_as_string[] = N_("E1024: Using a Number as a String");
+
 //{{{1 Lists
 //{{{2 List log
 #ifdef LOG_LIST_ACTIONS
@@ -3159,6 +3161,13 @@ int tv_check_for_string(const typval_T *const tv)
   return OK;
 }
 
+/// Like @ref tv_get_string_buf_chk_strict with `strict = false`.
+const char *tv_get_string_buf_chk(const typval_T *const tv, char *const buf)
+    FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return tv_get_string_buf_chk_strict(tv, buf, false);
+}
+
 /// Get the string value of a "stringish" VimL object.
 ///
 /// @param[in]  tv  Object to get value of.
@@ -3167,14 +3176,21 @@ int tv_check_for_string(const typval_T *const tv)
 ///              will be written to buf and buf will be returned.
 ///
 ///              Buffer must have NUMBUFLEN size.
+/// @param  strict  If true, disallow number to string conversions: throw an
+///                 error and return NULL instead.
 ///
 /// @return Object value if it is VAR_STRING object, number converted to
 ///         a string for VAR_NUMBER, v: variable name for VAR_SPECIAL or NULL.
-const char *tv_get_string_buf_chk(const typval_T *const tv, char *const buf)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
+const char *tv_get_string_buf_chk_strict(const typval_T *const tv, char *const buf,
+                                         const bool strict)
+    FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   switch (tv->v_type) {
   case VAR_NUMBER:
+    if (strict) {
+      EMSG(_(e_using_number_as_string));
+      break;
+    }
     snprintf(buf, NUMBUFLEN, "%" PRIdVARNUMBER, tv->vval.v_number);  // -V576
     return buf;
   case VAR_STRING:
@@ -3239,7 +3255,17 @@ const char *tv_get_string(const typval_T *const tv)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET FUNC_ATTR_WARN_UNUSED_RESULT
 {
   static char mybuf[NUMBUFLEN];
-  return tv_get_string_buf((typval_T *)tv, mybuf);
+  return tv_get_string_buf(tv, mybuf);
+}
+
+/// Like @ref tv_get_string with `strict = true` (disallow number to string conversions).
+const char *tv_get_string_strict(const typval_T *const tv)
+  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  static char mybuf[NUMBUFLEN];
+  const char *const res = tv_get_string_buf_chk_strict(tv, mybuf, true);
+
+  return res != NULL ? res : "";
 }
 
 /// Get the string value of a "stringish" VimL object.

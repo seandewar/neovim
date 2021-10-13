@@ -37,11 +37,9 @@ describe('ffi.cdef', function()
           typedef struct window_S win_T;
           typedef struct {} stl_hlrec_t;
           typedef struct {} StlClickRecord;
+          typedef struct {} Error;
 
-          #ifdef WIN32
-          __declspec(dllimport) 
-          #endif
-          win_T *curwin;
+          win_T *find_window_by_handle(int Window, Error *err);
 
           int build_stl_str_hl(
             win_T *wp,
@@ -57,7 +55,7 @@ describe('ffi.cdef', function()
         ]]
 
         return ffi.C.build_stl_str_hl(
-          ffi.C.curwin,
+          ffi.C.find_window_by_handle(0, ffi.new('Error')),
           ffi.new('char_u[1024]'),
           1024,
           ffi.cast('char_u*', 'StatusLineOfLength20'),

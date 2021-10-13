@@ -89,7 +89,7 @@ describe('API', function()
 
     it(':verbose set {option}?', function()
       nvim('exec', 'set nowrap', false)
-      eq('nowrap\n\tLast set from anonymous :source (script id 1)',
+      eq('nowrap\n\tLast set from anonymous :source',
         nvim('exec', 'verbose set wrap?', true))
     end)
 
@@ -155,6 +155,20 @@ describe('API', function()
           let s:pirate = 'script-scoped varrrrr'
           call nvim_exec('echo s:pirate', 1)
         ]], false))
+
+      -- Script items are created only on script var access
+      eq('1\n0', nvim('exec', [[
+          echo expand("<SID>")->empty()
+          let s:a = 123
+          echo expand("<SID>")->empty()
+        ]], true))
+
+      eq('1\n0', nvim('exec', [[
+          echo expand("<SID>")->empty()
+          function s:a() abort
+          endfunction
+          echo expand("<SID>")->empty()
+        ]], true))
     end)
 
     it('non-ASCII input', function()

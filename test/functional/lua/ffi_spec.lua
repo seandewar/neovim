@@ -1,8 +1,3 @@
--- Only run these tests when FFI is available
-if not pcall(require, 'ffi') then
-    return
-end
-
 local helpers = require('test.functional.helpers')(after_each)
 local eq = helpers.eq
 local exec_lua = helpers.exec_lua
@@ -13,6 +8,10 @@ before_each(clear)
 describe('ffi.cdef', function()
   describe('curwin_col_off', function()
     it('works', function()
+      if not exec_lua("return pcall(require, 'ffi')") then
+        pending()
+      end
+
       eq(12, exec_lua[[
         local ffi = require('ffi')
 
@@ -26,6 +25,10 @@ describe('ffi.cdef', function()
   end)
   describe('build_stl_str_hl', function()
     it('works', function()
+      if not exec_lua("return pcall(require, 'ffi')") then
+        pending()
+      end
+
       eq(20, exec_lua[=[
         local ffi = require('ffi')
 

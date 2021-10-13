@@ -9,7 +9,7 @@ describe('ffi.cdef', function()
   describe('curwin_col_off', function()
     it('works', function()
       if not exec_lua("return pcall(require, 'ffi')") then
-        pending()
+        pending('missing LuaJIT FFI')
       end
 
       eq(12, exec_lua[[
@@ -26,7 +26,7 @@ describe('ffi.cdef', function()
   describe('build_stl_str_hl', function()
     it('works', function()
       if not exec_lua("return pcall(require, 'ffi')") then
-        pending()
+        pending('missing LuaJIT FFI')
       end
 
       eq(20, exec_lua[=[
@@ -38,7 +38,10 @@ describe('ffi.cdef', function()
           typedef struct {} stl_hlrec_t;
           typedef struct {} StlClickRecord;
 
-          extern win_T *curwin;
+          #ifdef WIN32
+          __declspec(dllimport) 
+          #endif
+          win_T *curwin;
 
           int build_stl_str_hl(
             win_T *wp,

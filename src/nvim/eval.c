@@ -9129,6 +9129,8 @@ dictitem_T *find_var_in_ht(hashtab_T *const ht, int htname, const char *const va
 
 /// Finds the dict (g:, l:, s:, …) and hashtable used for a variable.
 ///
+/// Assigns SID if s: scope is accessed in anonymous scripts. #15994
+///
 /// @param[in]  name  Variable name, possibly with scope prefix.
 /// @param[in]  name_len  Variable name length.
 /// @param[out]  varname  Will be set to the start of the name without scope
@@ -9193,9 +9195,9 @@ static hashtab_T *find_var_ht_dict(const char *name, const size_t name_len, cons
   } else if (*name == 's'  // script variable
              && (current_sctx.sc_sid > 0 || current_sctx.sc_sid == SID_STR)
              && current_sctx.sc_sid <= ga_scripts.ga_len) {
-    // For anonymous scripts without a script item, create one now so script vars can be used
+    // Create SID if s: scope is accessed in anonymous scripts. #15994
     if (current_sctx.sc_sid == SID_STR) {
-      new_script_item(NULL, &current_sctx.sc_sid);
+      script_new_vars(&current_sctx.sc_sid);
     }
     *d = &SCRIPT_SV(current_sctx.sc_sid)->sv_dict;
   }

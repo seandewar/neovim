@@ -136,7 +136,8 @@ describe('memory usage', function()
   it('function capture lvars', function()
     local pid = eval('getpid()')
     local before = monitor_memory_usage(pid)
-    local fname = source([[
+    local fname = helpers.tmpname()
+    helpers.write_file(fname, [[
       if !exists('s:defined_func')
         func s:f()
           let x = l:
@@ -147,10 +148,11 @@ describe('memory usage', function()
         call s:f()
       endfor
     ]])
+    feed_command("source " .. fname)
     poke_eventloop()
     local after = monitor_memory_usage(pid)
     for _ = 1, 3 do
-      feed_command('so '..fname)
+      feed_command("source " .. fname)
       poke_eventloop()
     end
     local last = monitor_memory_usage(pid)

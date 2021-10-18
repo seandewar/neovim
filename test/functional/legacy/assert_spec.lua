@@ -28,11 +28,11 @@ describe('assert function:', function()
     end)
 
     it('can be used as a method', function()
-      local tmpname = source [[
+      source [[
         call assert_equal(0, 'normal h'->assert_beeps())
         call assert_equal(1, 'normal 0'->assert_beeps())
       ]]
-      expected_errors({tmpname .. ' line 2: command did not beep: normal 0'})
+      expected_errors({'nvim_exec(): command did not beep: normal 0'})
     end)
   end)
 
@@ -143,11 +143,11 @@ describe('assert function:', function()
     end)
 
     it('can be used as a method', function()
-      local tmpname = source [[
+      source [[
         call assert_equal(0, v:false->assert_false())
         call assert_equal(1, 123->assert_false())
       ]]
-      expected_errors({tmpname .. ' line 2: Expected False but got 123'})
+      expected_errors({'nvim_exec(): Expected False but got 123'})
     end)
   end)
 
@@ -166,11 +166,11 @@ describe('assert function:', function()
     end)
 
     it('can be used as a method', function()
-      local tmpname = source [[
+      source [[
         call assert_equal(0, v:true->assert_true())
         call assert_equal(1, 0->assert_true())
       ]]
-      expected_errors({tmpname .. ' line 2: Expected True but got 0'})
+      expected_errors({'nvim_exec(): Expected True but got 0'})
     end)
   end)
 
@@ -202,19 +202,19 @@ describe('assert function:', function()
     end)
 
     it('should have file names and passed messages', function()
-      local tmpname_one = source([[
+      source([[
         call assert_equal(1, 100, 'equal assertion failed')
         call assert_false('true', 'true  assertion failed')
         call assert_true('false', 'false assertion failed')
       ]])
-      local tmpname_two = source([[
+      source([[
         call assert_true('', 'file two')
       ]])
       expected_errors({
-        tmpname_one .. " line 1: equal assertion failed: Expected 1 but got 100",
-        tmpname_one .. " line 2: true  assertion failed: Expected False but got 'true'",
-        tmpname_one .. " line 3: false assertion failed: Expected True but got 'false'",
-        tmpname_two .. " line 1: file two: Expected True but got ''",
+        "nvim_exec(): equal assertion failed: Expected 1 but got 100",
+        "nvim_exec(): true  assertion failed: Expected False but got 'true'",
+        "nvim_exec(): false assertion failed: Expected True but got 'false'",
+        "nvim_exec(): file two: Expected True but got ''",
       })
     end)
 
@@ -249,11 +249,11 @@ describe('assert function:', function()
     end)
 
     it('can be used as a method', function()
-      local tmpname = source [[
+      source [[
         call assert_equal(1, 'foobar'->assert_match('bar.*foo', 'wrong'))
       ]]
       expected_errors({
-        tmpname .. " line 1: wrong: Pattern 'bar.*foo' does not match 'foobar'"
+        "nvim_exec(): wrong: Pattern 'bar.*foo' does not match 'foobar'"
       })
     end)
   end)
@@ -272,10 +272,10 @@ describe('assert function:', function()
     end)
 
     it('can be used as a method', function()
-      local tmpname = source [[
+      source [[
         call assert_equal(1, 'foobar'->assert_notmatch('foo'))
       ]]
-      expected_errors({tmpname .. " line 1: Pattern 'foo' does match 'foobar'"})
+      expected_errors({"nvim_exec(): Pattern 'foo' does match 'foobar'"})
     end)
   end)
 
@@ -309,11 +309,11 @@ describe('assert function:', function()
     end)
 
     it('can be used as a method', function()
-      local tmpname = source [[
+      source [[
         call assert_equal(1, 'echo'->assert_fails('', 'echo command'))
       ]]
       expected_errors({
-        tmpname .. ' line 1: command did not fail: echo command'
+        'nvim_exec(): command did not fail: echo command'
       })
     end)
   end)
@@ -343,12 +343,12 @@ describe('assert function:', function()
     end)
 
     it('can be used as a method', function()
-      local tmpname = source [[
+      source [[
         call assert_equal(0, 5->assert_inrange(5, 7))
         call assert_equal(0, 7->assert_inrange(5, 7))
         call assert_equal(1, 8->assert_inrange(5, 7))
       ]]
-      expected_errors({tmpname .. ' line 3: Expected range 5 - 7, but got 8'})
+      expected_errors({'nvim_exec(): Expected range 5 - 7, but got 8'})
     end)
   end)
 
@@ -362,10 +362,10 @@ describe('assert function:', function()
     end)
 
     it('can be used as a method', function()
-      local tmpname = source [[
+      source [[
         call assert_equal(1, 'also wrong'->assert_report())
       ]]
-      expected_errors({tmpname .. ' line 1: also wrong'})
+      expected_errors({'nvim_exec(): also wrong'})
     end)
   end)
 

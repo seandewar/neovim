@@ -33,6 +33,8 @@
 #define linenr_T_eq kh_int_hash_equal
 #define handle_T_hash kh_int_hash_func
 #define handle_T_eq kh_int_hash_equal
+#define scid_T_hash kh_int_hash_func
+#define scid_T_eq kh_int_hash_equal
 
 
 #if defined(ARCH_64)
@@ -189,6 +191,7 @@ MAP_IMPL(ptr_t, ptr_t, DEFAULT_INITIALIZER)
 MAP_IMPL(uint64_t, ptr_t, DEFAULT_INITIALIZER)
 MAP_IMPL(uint64_t, ssize_t, SSIZE_INITIALIZER)
 MAP_IMPL(uint64_t, uint64_t, DEFAULT_INITIALIZER)
+MAP_IMPL(scid_T, ptr_t, DEFAULT_INITIALIZER)
 #define EXTMARK_NS_INITIALIZER { { MAP_INIT }, 1 }
 MAP_IMPL(uint64_t, ExtmarkNs, EXTMARK_NS_INITIALIZER)
 #define EXTMARK_ITEM_INITIALIZER { 0, 0, NULL }

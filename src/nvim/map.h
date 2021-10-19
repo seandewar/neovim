@@ -5,6 +5,7 @@
 
 #include "nvim/api/private/defs.h"
 #include "nvim/api/private/dispatch.h"
+#include "nvim/eval/typval.h"
 #include "nvim/extmark_defs.h"
 #include "nvim/highlight_defs.h"
 #include "nvim/map_defs.h"
@@ -50,6 +51,7 @@ typedef struct ExtmarkNs {  // For namespacing extmarks
   uint64_t free_id;         // For automatically assigning id's
 } ExtmarkNs;
 
+MAP_DECLS(scid_T, ptr_t)
 MAP_DECLS(uint64_t, ExtmarkNs)
 MAP_DECLS(uint64_t, ExtmarkItem)
 MAP_DECLS(handle_T, ptr_t)

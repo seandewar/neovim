@@ -1952,17 +1952,7 @@ static char_u *get_str_line(int c, void *cookie, int indent, bool do_concat)
   return ga.ga_data;
 }
 
-/// Ensure script item exists for the current anonymous script to allow
-/// use of script variables #15994.
-void script_ensure_anon_item(void)
-{
-  if (current_sctx.sc_sid > 0 && script_item(current_sctx.sc_sid) == NULL) {
-    (void)new_script_item(current_sctx.sc_sid, NULL);
-  }
-}
-
-/// Create a new script item and allocate script-local vars. @see new_script_vars
-///
+/// Create a new script item.
 /// @note `sn_name` is set to `name` while `sn_prof_on` and `file_id_valid` are set to false.
 ///       Other fields are left uninitialized!
 ///
@@ -1977,7 +1967,6 @@ static scriptitem_T *new_script_item(const scid_T id, char_u *const name)
   si->sn_prof_on = false;
   si->file_id_valid = false;
   pmap_put(scid_T)(&script_items, id, si);
-  new_script_vars(id);  // Allocate the local script variables to use for this script.
   return si;
 }
 

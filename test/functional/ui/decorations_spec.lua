@@ -1361,4 +1361,56 @@ if (h->n_buckets < new_n_buckets) { // expand
     ]]}
   end)
 
+  it('cursor is adjusted when virtual lines change', function()
+    insert("aa\nbb\ncc\ndd\nee\nff")
+
+    -- virtual lines added underneath the cursor
+    feed '2G'
+    meths.buf_set_extmark(0, ns, 0, 0, {
+      virt_lines={{{"derpy derp derp"}}, {{"wee woo"}}},
+    })
+    screen:expect [[
+      aa                                                |
+      derpy derp derp                                   |
+      wee woo                                           |
+      ^bb                                                |
+      cc                                                |
+      dd                                                |
+      ee                                                |
+      ff                                                |
+      {1:~                                                 }|
+      {1:~                                                 }|
+      {1:~                                                 }|
+                                                        |
+    ]]
+
+    -- virtual lines added above the cursor
+    -- TODO(seandewar): why is the cursor in the wrong place?!?!?!?!
+    feed '4G'
+    meths.buf_set_extmark(0, ns, 1, 0, {
+      virt_lines={{{"<>< <>< <><"}}},
+    })
+    screen:expect [[
+      aa                                                |
+      derpy derp derp                                   |
+      wee woo                                           |
+      bb                                                |
+      <>< <>< <><                                       |
+      cc                                                |
+      ^dd                                                |
+      ee                                                |
+      ff                                                |
+      {1:~                                                 }|
+      {1:~                                                 }|
+                                                        |
+    ]]
+
+    -- virtual lines added below the cursor
+    -- feed '7G'
+    -- meths.buf_set_extmark(0, ns, 1, 0, {
+    --   virt_lines={{{"<>< <>< <><"}}},
+    -- })
+    -- screen:snapshot_util()
+  end)
+
 end)

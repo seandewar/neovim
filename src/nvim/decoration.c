@@ -6,6 +6,7 @@
 #include "nvim/highlight.h"
 #include "nvim/lua/executor.h"
 #include "nvim/screen.h"
+#include "nvim/move.h"
 #include "nvim/syntax.h"
 #include "nvim/vim.h"
 
@@ -74,6 +75,11 @@ void decor_redraw(buf_T *buf, int row1, int row2, Decoration *decor)
   }
 
   if (decor && kv_size(decor->virt_lines)) {
+    if (curwin->w_buffer == buf) {
+      // w_wrow and w_cline_row may need recomputing
+      curwin->w_valid &= ~VALID_CROW;
+      curs_columns(curwin, false);
+    }
     redraw_buf_line_later(buf, MIN(buf->b_ml.ml_line_count,
                                    row1+1+(decor->virt_lines_above?0:1)));
   }

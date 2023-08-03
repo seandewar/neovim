@@ -196,7 +196,8 @@ function M.register(reg, ctx)
   if
     -- Ill-behaved servers may not honor the client capability and try to register
     -- anyway, so ignore requests when the user has opted out of the feature.
-    not client.config.capabilities.workspace.didChangeWatchedFiles.dynamicRegistration
+    not client.config.capabilities
+    or not client.config.capabilities.workspace.didChangeWatchedFiles.dynamicRegistration
     or not client.workspace_folders
   then
     return

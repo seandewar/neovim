@@ -90,6 +90,7 @@ describe(':Tutor', function()
     ]]
 
     feed(':700<CR>zt')
+    command('syntax iskeyword @,-,_,-')
     screen:expect(expected)
   end)
 end)

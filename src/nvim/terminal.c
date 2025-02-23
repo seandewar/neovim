@@ -771,6 +771,8 @@ bool terminal_enter(void)
   // Tell the terminal it lost focus
   terminal_focus(s->term, false);
 
+  // TODO(seandewar): investigate why <c-\><c-o><c-w>p<c-\><c-o><c-w>p<c-\><c-n> between 2 terms
+  // doesnt redraw the cursor...
   if (curbuf->terminal == s->term && !s->close) {
     terminal_check_cursor();
   }

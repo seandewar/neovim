@@ -783,11 +783,12 @@ bool terminal_enter(void)
   adjust_topline(s->term, buf, 0);  // scroll to end
   showmode();
   ui_cursor_shape();
-  apply_autocmds(EVENT_TERMENTER, NULL, NULL, false, curbuf);
-  may_trigger_modechanged();
 
   // Tell the terminal it has focus
   terminal_focus(s->term, true);
+
+  apply_autocmds(EVENT_TERMENTER, NULL, NULL, false, curbuf);
+  may_trigger_modechanged();
 
   s->state.execute = terminal_execute;
   s->state.check = terminal_check;
@@ -802,8 +803,6 @@ bool terminal_enter(void)
     // If cursor was hidden, show it again. Do so right after restoring State.
     ui_busy_stop();
   }
-
-  apply_autocmds(EVENT_TERMLEAVE, NULL, NULL, false, curbuf);
 
   // Restore the terminal cursor to what is set in 'guicursor'
   (void)parse_shape_opt(SHAPE_CURSOR);
@@ -824,12 +823,15 @@ bool terminal_enter(void)
     unshowmode(true);
   }
   ui_cursor_shape();
+
+  apply_autocmds(EVENT_TERMLEAVE, NULL, NULL, false, curbuf);
+
   if (s->close) {
-    bool wipe = s->term->buf_handle != 0;
+    const handle_T buf_handle = s->term->buf_handle;  // Callback may free s->term.
     s->term->destroy = true;
     s->term->opts.close_cb(s->term->opts.data);
-    if (wipe) {
-      do_cmdline_cmd("bwipeout!");
+    if (buf_handle != 0) {
+      do_buffer(DOBUF_WIPE, DOBUF_FIRST, FORWARD, buf_handle, true);
     }
   }
 
@@ -847,16 +849,48 @@ static void terminal_check_cursor(void)
   // Don't update topline if it's unchanged to avoid triggering TextChangedT unnecessarily.
   if (topline != curwin->w_topline) {
     set_topline(curwin, topline);
+  } else {
+    // TODO(seandewar): fix this properly. note that topline might be wrong here if the window is
+    // too short for the cursor; ensure it's on-screen in this case. also, a lot of this stuff
+    // assumes nowrap is set, though that's only done by _defaults.lua; ought to work at least
+    // somewhat properly with &wrap.
+    curwin->w_valid &= ~VALID_WROW;
   }
   // Nudge cursor when returning to normal-mode.
   int off = is_focused(term) ? 0 : (curwin->w_p_rl ? 1 : -1);
   coladvance(curwin, MAX(0, term->cursor.col + off));
 }
 
-// Function executed before each iteration of terminal mode.
-// Return:
-//   1 if the iteration should continue normally
-//   0 if the main loop must exit
+static bool terminal_check_focus(TerminalState *const s)
+  FUNC_ATTR_NONNULL_ALL
+{
+  if (curbuf->terminal == NULL) {
+    return false;
+  }
+
+  if (s->save_curwin_handle != curwin->handle) {
+    // Terminal window changed, update window options.
+    unset_terminal_winopts(s);
+    set_terminal_winopts(s);
+  }
+  if (s->term != curbuf->terminal) {
+    // Active terminal buffer changed, flush terminal's cursor state to the UI.
+    terminal_focus(s->term, false);
+
+    s->term = curbuf->terminal;
+    s->term->pending.cursor = true;
+    invalidate_terminal(s->term, -1, -1);
+    terminal_focus(s->term, true);
+  }
+  return true;
+}
+
+/// Function executed before each iteration of terminal mode.
+///
+/// @return:
+///           1 if the iteration should continue normally
+///          -1 if the iteration should be skipped
+///           0 if the main loop must exit
 static int terminal_check(VimState *state)
 {
   TerminalState *const s = (TerminalState *)state;
@@ -864,13 +898,27 @@ static int terminal_check(VimState *state)
   if (stop_insert_mode) {
     return 0;
   }
-
-  assert(s->term == curbuf->terminal);
+  if (!terminal_check_focus(s)) {
+    return 0;
+  }
+  // Validate topline and cursor position for autocommands. Especially important for WinScrolled.
   terminal_check_cursor();
   validate_cursor(curwin);
-  const bool text_changed = must_redraw != 0;
-  show_cursor_info_later(false);
 
+  if (must_redraw) {
+    // TODO(seandewar): above changes will maybe change the behaviour of this more; untrollify this
+    apply_autocmds(EVENT_TEXTCHANGEDT, NULL, NULL, false, curbuf);
+  }
+  may_trigger_win_scrolled_resized();
+
+  // Autocommands above may have changed focus, scrolled, or moved the cursor.
+  if (!terminal_check_focus(s)) {
+    return 0;
+  }
+  terminal_check_cursor();
+  validate_cursor(curwin);
+
+  show_cursor_info_later(false);
   if (must_redraw) {
     update_screen();
   } else {
@@ -879,21 +927,6 @@ static int terminal_check(VimState *state)
       showmode();  // clear cmdline and show mode
     }
   }
-  if (text_changed) {
-    // Make sure an invoked autocmd doesn't delete the buffer (and the
-    // terminal) under our fingers.
-    curbuf->b_locked++;
-
-    // save and restore curwin and curbuf, in case the autocmd changes them
-    aco_save_T aco;
-    aucmd_prepbuf(&aco, curbuf);
-    apply_autocmds(EVENT_TEXTCHANGEDT, NULL, NULL, false, curbuf);
-    aucmd_restbuf(&aco);
-
-    curbuf->b_locked--;
-  }
-
-  may_trigger_win_scrolled_resized();
 
   setcursor();
   refresh_cursor(s->term, &s->cursor_visible);
@@ -994,23 +1027,6 @@ static int terminal_execute(VimState *state, int key)
     terminal_send_key(s->term, key);
   }
 
-  if (curbuf->terminal == NULL) {
-    return 0;
-  }
-  if (s->save_curwin_handle != curwin->handle) {
-    // Terminal window changed, update window options.
-    unset_terminal_winopts(s);
-    set_terminal_winopts(s);
-  }
-  if (s->term != curbuf->terminal) {
-    // Active terminal buffer changed, flush terminal's cursor state to the UI
-    terminal_focus(s->term, false);
-
-    s->term = curbuf->terminal;
-    s->term->pending.cursor = true;
-    invalidate_terminal(s->term, -1, -1);
-    terminal_focus(s->term, true);
-  }
   return 1;
 }
 

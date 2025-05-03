@@ -1128,7 +1128,7 @@ void do_highlight(const char *line, const bool forceit, const bool init)
     line = linep;
     if (ends_excmd((uint8_t)(*line))) {
       do_unlet(S_LEN("g:colors_name"), true);
-      restore_cterm_colors();
+      restore_normal_colors();
 
       // Clear all default highlight groups and load the defaults.
       for (int j = 0; j < highlight_ga.ga_len; j++) {
@@ -1539,9 +1539,8 @@ void free_highlight(void)
 
 #endif
 
-/// Reset the cterm colors to what they were before Vim was started, if
-/// possible.  Otherwise reset them to zero.
-void restore_cterm_colors(void)
+/// Reset the Normal colors to what they were before Vim was started.
+void restore_normal_colors(void)
 {
   normal_fg = -1;
   normal_bg = -1;
@@ -1588,6 +1587,10 @@ static void highlight_clear(int idx)
   // Since we set the default link, set the location to where the default
   // link was set.
   hl_table[idx].sg_script_ctx = hl_table[idx].sg_deflink_sctx;
+
+  if (strequal(hl_table[idx].sg_name_u, "NORMAL")) {
+    restore_normal_colors();
+  }
 }
 
 /// \addtogroup LIST_XXX

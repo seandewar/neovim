@@ -17,6 +17,7 @@
 #include "nvim/memory.h"
 #include "nvim/memory_defs.h"
 #include "nvim/option.h"
+#include "nvim/option_vars.h"
 #include "nvim/types_defs.h"
 #include "nvim/vim_defs.h"
 #include "nvim/window.h"
@@ -110,6 +111,11 @@ static buf_T *do_ft_buf(const char *filetype, aco_save_T *aco, bool *aco_used, E
   if (filetype == NULL) {
     return NULL;
   }
+  // Can't do much if FileType autocommands are disabled; bail early.
+  if (is_autocmd_blocked() || event_ignored(EVENT_FILETYPE, p_ei)) {
+    api_set_error(err, kErrorTypeException, "FileType autocommands are disabled");
+    return NULL;
+  }
 
   // Allocate a buffer without putting it in the buffer list.
   buf_T *ftbuf = buflist_new(NULL, NULL, 1, BLN_DUMMY);
@@ -139,8 +145,13 @@ static buf_T *do_ft_buf(const char *filetype, aco_save_T *aco, bool *aco_used, E
   ftbuf->b_p_ml = false;
   ftbuf->b_p_ft = xstrdup(filetype);
 
+  if (!has_event(EVENT_FILETYPE)) {
+    return ftbuf;  // Nothing more to do.
+  }
+
+  bool did_au_ft = false;
   TRY_WRAP(err, {
-    do_filetype_autocmd(ftbuf, false);
+    did_au_ft = do_filetype_autocmd(ftbuf, true);
   });
 
   if (!bufref_valid(&bufref)) {
@@ -150,6 +161,9 @@ static buf_T *do_ft_buf(const char *filetype, aco_save_T *aco, bool *aco_used, E
     return NULL;
   }
 
+  if (!did_au_ft && !ERROR_SET(err)) {
+    api_set_error(err, kErrorTypeException, "Could not execute FileType autocommands");
+  }
   return ftbuf;
 }
 

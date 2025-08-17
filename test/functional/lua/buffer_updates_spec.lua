@@ -14,6 +14,8 @@ local feed = n.feed
 local expect_events = t.expect_events
 local write_file = t.write_file
 local dedent = t.dedent
+local matches = t.matches
+local pcall_err = t.pcall_err
 
 local origlines = {
   'original line 1',
@@ -321,6 +323,121 @@ describe('lua buffer event callbacks: on_lines', function()
       vim.cmd.bdelete()
     ]])
     eq(true, exec_lua('return _G.did_detach'))
+  end)
+
+  it('on_detach called just before buf_freeall autocommands', function()
+    exec_lua([[
+      vim.api.nvim_create_autocmd({"BufUnload", "BufDelete", "BufWipeout"}, {
+        callback = function(args)
+          table.insert(_G.events, ("%s: %d %s"):format(
+            args.event, args.buf, tostring(vim.api.nvim_buf_is_loaded(args.buf))))
+        end,
+      })
+      function _G.on_detach(_, b)
+        table.insert(_G.events, ("on_detach: %d %s"):format(
+          b, tostring(vim.api.nvim_buf_is_loaded(b))))
+      end
+      _G.events = {}
+      vim.cmd "new"
+      vim.bo.bufhidden = "wipe"
+      vim.api.nvim_buf_attach(0, false, { on_detach = _G.on_detach })
+      vim.cmd "quit!"
+    ]])
+
+    eq(
+      { 'on_detach: 2 true', 'BufUnload: 2 true', 'BufDelete: 2 true', 'BufWipeout: 2 true' },
+      exec_lua('return _G.events')
+    )
+    eq(false, api.nvim_buf_is_valid(2))
+
+    exec_lua([[
+      _G.events = {}
+      local buf = vim.api.nvim_create_buf(false, true)
+      vim.api.nvim_buf_attach(buf, false, { on_detach = _G.on_detach })
+      vim.api.nvim_buf_delete(buf, { force = true })
+    ]])
+
+    -- Was unlisted, so no BufDelete.
+    eq(
+      { 'on_detach: 3 true', 'BufUnload: 3 true', 'BufWipeout: 3 true' },
+      exec_lua('return _G.events')
+    )
+    eq(false, api.nvim_buf_is_valid(3))
+
+    exec_lua([[
+      _G.events = {}
+      vim.api.nvim_buf_attach(1, false, { on_detach = _G.on_detach })
+      vim.api.nvim_create_autocmd("BufUnload", {
+        buffer = 1,
+        once = true,
+        callback = function()
+          vim.api.nvim_buf_attach(1, false, { on_detach = function(...)
+            vim.fn.bufload(1) -- Leaks the memfile it were to run inside free_buffer_stuff.
+            return _G.on_detach(...)
+          end })
+          table.insert(_G.events, "local BufUnload")
+        end,
+      })
+      vim.cmd "edit asdf" -- Reuses buffer 1.
+    ]])
+
+    -- on_detach shouldn't run after autocommands when reusing a buffer (in free_buffer_stuff), even
+    -- if those autocommands registered it, as curbuf may be in a semi-unloaded state at that point.
+    eq({
+      'on_detach: 1 true',
+      'BufUnload: 1 true',
+      'local BufUnload',
+      'BufDelete: 1 true',
+      'BufWipeout: 1 true',
+    }, exec_lua('return _G.events'))
+
+    exec_lua([[
+      _G.events = {}
+      vim.api.nvim_buf_attach(0, false, { on_detach = _G.on_detach })
+      vim.cmd "edit"
+    ]])
+
+    -- Re-edit buffer; on_detach is called.
+    eq({ 'on_detach: 1 true', 'BufUnload: 1 true' }, exec_lua('return _G.events'))
+    eq(true, api.nvim_buf_is_valid(1))
+  end)
+
+  it('on_detach in buf_freeall disallows splitting', function()
+    command('new | setlocal bufhidden=wipe')
+    local buf = api.nvim_get_current_buf()
+    exec_lua [[
+      vim.api.nvim_buf_attach(0, false, {
+        on_detach = function()
+          -- Used to allow opening more views into a closing buffer, resulting in open windows to an
+          -- unloaded buffer.
+          vim.cmd [=[execute "normal! \<C-W>s"]=]
+        end,
+      })
+    ]]
+    matches('E1159: Cannot split a window when closing the buffer$', pcall_err(command, 'quit!'))
+    eq({}, fn.win_findbuf(buf))
+    eq(false, api.nvim_buf_is_valid(buf))
+  end)
+
+  it('nvim_buf_attach within buf_freeall autocommands does not leak', function()
+    exec_lua [[
+      local b = vim.api.nvim_create_buf(true, true)
+      vim.api.nvim_create_autocmd("BufWipeout", {
+        buffer = b,
+        once = true,
+        callback = function()
+          vim.api.nvim_buf_attach(b, false, { on_detach = function()
+            _G.on_detach_fired = true
+          end })
+          _G.autocmd_fired = true
+        end,
+      })
+      vim.api.nvim_buf_delete(b, { force = true })
+      _G.buf_valid = vim.api.nvim_buf_is_valid(b)
+    ]]
+    eq(true, exec_lua('return _G.autocmd_fired'))
+    eq(false, exec_lua('return _G.on_detach_fired ~= nil'))
+    eq(false, exec_lua('return _G.buf_valid'))
   end)
 
   it('#12718 lnume', function()

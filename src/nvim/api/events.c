@@ -19,6 +19,7 @@
 #include "nvim/channel.h"
 #include "nvim/channel_defs.h"
 #include "nvim/eval/vars.h"
+#include "nvim/event/multiqueue.h"
 #include "nvim/globals.h"
 #include "nvim/main.h"
 #include "nvim/map_defs.h"
@@ -44,6 +45,33 @@ void nvim_error_event(uint64_t channel_id, Integer type, String msg)
   ELOG("async error on channel %" PRId64 ": %s", channel_id, msg.size ? msg.data : "");
 }
 
+static bool pending_termresponse = false;
+
+static void do_termresponse_autocmd(const String sequence)
+{
+  MAXSIZE_TEMP_DICT(data, 1);
+  PUT_C(data, "sequence", STRING_OBJ(sequence));
+  apply_autocmds_group(EVENT_TERMRESPONSE, NULL, NULL, true, AUGROUP_ALL, NULL, NULL,
+                       &DICT_OBJ(data));
+  pending_termresponse = false;
+}
+
+static void deferred_termresponse(void **argv)
+{
+  if (!pending_termresponse) {
+    return;
+  }
+  if (is_autocmd_blocked()) {
+    multiqueue_put(deferred_events, deferred_termresponse, NULL);
+    return;
+  }
+
+  // Allocate, as v:termresponse may change during the event.
+  const String sequence = cstr_to_string(get_vim_var_str(VV_TERMRESPONSE));
+  do_termresponse_autocmd(sequence);
+  api_free_string(sequence);
+}
+
 /// Emitted by the TUI client to signal when a host-terminal event occurred.
 ///
 /// Supports these events:
@@ -65,12 +93,20 @@ void nvim_ui_term_event(uint64_t channel_id, String event, Object value, Error *
       return;
     }
 
-    const String termresponse = value.data.string;
-    set_vim_var_string(VV_TERMRESPONSE, termresponse.data, (ptrdiff_t)termresponse.size);
+    const String sequence = value.data.string;
+    set_vim_var_string(VV_TERMRESPONSE, sequence.data, (ptrdiff_t)sequence.size);
 
-    MAXSIZE_TEMP_DICT(data, 1);
-    PUT_C(data, "sequence", value);
-    apply_autocmds_group(EVENT_TERMRESPONSE, NULL, NULL, true, AUGROUP_ALL, NULL, NULL,
-                         &DICT_OBJ(data));
+    if (!has_event(EVENT_TERMRESPONSE)) {
+      pending_termresponse = false;
+      return;
+    }
+    if (is_autocmd_blocked()) {
+      if (!pending_termresponse) {
+        multiqueue_put(deferred_events, deferred_termresponse, NULL);
+        pending_termresponse = true;
+      }
+      return;
+    }
+    do_termresponse_autocmd(sequence);
   }
 }

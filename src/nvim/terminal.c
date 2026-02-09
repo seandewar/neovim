@@ -872,9 +872,8 @@ bool terminal_enter(void)
   RedrawingDisabled = false;
 
   set_terminal_winopts(s);
-
+  scroll_to_screen(curwin);
   s->term->pending.cursor = true;  // Update the cursor shape table
-  adjust_topline_cursor(s->term, buf, 0);  // scroll to end
   showmode();
   ui_cursor_shape();
 
@@ -943,11 +942,6 @@ static void terminal_check_cursor(void)
   Terminal *term = curbuf->terminal;
   curwin->w_cursor.lnum = MIN(curbuf->b_ml.ml_line_count,
                               row_to_linenr(term, term->cursor.row));
-  const linenr_T topline = MAX(curbuf->b_ml.ml_line_count - curwin->w_view_height + 1, 1);
-  // Don't update topline if unchanged to avoid unnecessary redraws.
-  if (topline != curwin->w_topline) {
-    set_topline(curwin, topline);
-  }
   // Nudge cursor when returning to normal-mode.
   int off = is_focused(term) ? 0 : (curwin->w_p_rl ? 1 : -1);
   coladvance(curwin, MAX(0, term->cursor.col + off));
@@ -964,6 +958,7 @@ static bool terminal_check_focus(TerminalState *const s)
     // Terminal window changed, update window options.
     unset_terminal_winopts(s);
     set_terminal_winopts(s);
+    scroll_to_screen(curwin);
   }
   if (s->term != curbuf->terminal) {
     // Active terminal changed, flush terminal's cursor state to the UI.
@@ -2246,13 +2241,11 @@ static void refresh_terminal(Terminal *term)
   int ml_added = buf->b_ml.ml_line_count - ml_before;
   adjust_topline_cursor(term, buf, ml_added);
 
-  // Resized window may have scrolled horizontally to keep its cursor in-view using the old terminal
-  // size. Reset the scroll, and let curs_columns correct it if that sends the cursor out-of-view.
+  // Resized window may have scrolled to keep its cursor in-view using the terminal's old size.
   if (resized) {
     FOR_ALL_TAB_WINDOWS(tp, wp) {
-      if (wp->w_buffer == buf && wp->w_leftcol != 0) {
-        wp->w_leftcol = 0;
-        curs_columns(wp, true);
+      if (wp->w_buffer == buf) {
+        scroll_to_screen(wp);
       }
     }
   }
@@ -2475,6 +2468,23 @@ static void refresh_screen(Terminal *term, buf_T *buf)
   term->invalid_end = -1;
 }
 
+static void scroll_to_screen(win_T *const wp)
+  FUNC_ATTR_NONNULL_ALL
+{
+  const linenr_T topline = MAX(wp->w_buffer->b_ml.ml_line_count - wp->w_view_height + 1, 1);
+  const bool topline_differs = wp->w_topline != topline;
+  if (topline_differs) {
+    set_topline(wp, topline);
+  }
+  // Our topline/leftcol may scroll cursor out-of-view; update_topline/curs_columns adjusts if so.
+  if (wp->w_leftcol != 0) {
+    wp->w_leftcol = 0;
+    curs_columns(wp, true);  // also calls update_topline
+  } else if (topline_differs) {
+    update_topline(wp);
+  }
+}
+
 static void adjust_topline_cursor(Terminal *term, buf_T *buf, int added)
 {
   linenr_T ml_end = buf->b_ml.ml_line_count;
@@ -2484,6 +2494,7 @@ static void adjust_topline_cursor(Terminal *term, buf_T *buf, int added)
       if (wp == curwin && is_focused(term)) {
         // Move window cursor to terminal cursor's position and "follow" output.
         terminal_check_cursor();
+        scroll_to_screen(wp);
         continue;
       }
 

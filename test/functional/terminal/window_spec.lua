@@ -617,20 +617,20 @@ describe(':terminal window', function()
     command('tabprevious')
     screen:expect([[
       {1: }{5:2}{1: foo }{2: foo }{4:                                     }{2:X}|
-      {19:r}ows: 5, cols: 25        │rows: 5, cols: 25       |
-      rows: 5, cols: 50        │rows: 5, cols: 50       |
+      {19:r}ows: 5, cols: 25        │tty ready               |
+      rows: 5, cols: 50        │rows: 5, cols: 25       |
+      {19: }                        │rows: 5, cols: 50       |
       {19: }                        │^                        |
-      {19: }                        │                        |
       {18:foo [-]                   }{17:foo [-]                 }|
       {1:-- TERMINAL --}                                    |
     ]])
     feed([[<C-\><C-N>]])
     screen:expect([[
       {1: }{5:2}{1: foo }{2: foo }{4:                                     }{2:X}|
-      {19:r}ows: 5, cols: 25        │rows: 5, cols: 25       |
-      rows: 5, cols: 50        │rows: 5, cols: 50       |
+      {19:r}ows: 5, cols: 25        │tty ready               |
+      rows: 5, cols: 50        │rows: 5, cols: 25       |
+      {19: }                        │rows: 5, cols: 50       |
       {19: }                        │{12:^                        }|
-      {19: }                        │                        |
       {18:foo [-]                   }{17:foo [-]                 }|
                                                         |
     ]])
@@ -650,10 +650,10 @@ describe(':terminal window', function()
     feed('i')
     screen:expect([[
       {1: }{5:2}{1: foo }{2: foo }{4:                                     }{2:X}|
-      {19:r}ows: 5, cols: 25        │rows: 5, cols: 25       |
-      rows: 5, cols: 50        │rows: 5, cols: 50       |
+      {19:r}ows: 5, cols: 25        │tty ready               |
+      rows: 5, cols: 50        │rows: 5, cols: 25       |
+      {19: }                        │rows: 5, cols: 50       |
       {19: }                        │^                        |
-      {19: }                        │                        |
       {18:foo [-]                   }{17:foo [-]                 }|
       {1:-- TERMINAL --}                                    |
     ]])
@@ -683,20 +683,20 @@ describe(':terminal window', function()
     feed([[<C-W>pi]])
     screen:expect([[
       {1: }{5:2}{1: foo }{2: foo }{4:                                     }{2:X}|
-                               │rows: 5, cols: 25       |
+                               │tty ready               |
+      {6:~                        }│rows: 5, cols: 25       |
       {6:~                        }│rows: 5, cols: 50       |
       {6:~                        }│^                        |
-      {6:~                        }│                        |
       {4:[No Name]                 }{17:foo [-]                 }|
       {1:-- TERMINAL --}                                    |
     ]])
     command('wincmd p')
     screen:expect([[
       {1: }{5:2}{1: [No Name] }{2: foo }{4:                               }{2:X}|
-      ^                         │{19:r}ows: 5, cols: 25       |
+      ^                         │{19:t}ty ready               |
+      {6:~                        }│{19:r}ows: 5, cols: 25       |
       {6:~                        }│{19:r}ows: 5, cols: 50       |
       {6:~                        }│                        |
-      {6:~                        }│{19: }                       |
       {7:[No Name]                 }{18:foo [-]                 }|
                                                         |
     ]])
@@ -712,10 +712,10 @@ describe(':terminal window', function()
     command('buffer # | startinsert')
     screen:expect([[
       {1: }{5:2}{1: foo }{2: foo }{4:                                     }{2:X}|
-                               │rows: 5, cols: 25       |
+                               │tty ready               |
+      {6:~                        }│rows: 5, cols: 25       |
       {6:~                        }│rows: 5, cols: 50       |
       {6:~                        }│^                        |
-      {6:~                        }│                        |
       {4:[No Name]                 }{17:foo [-]                 }|
       {1:-- TERMINAL --}                                    |
     ]])

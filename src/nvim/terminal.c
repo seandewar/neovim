@@ -2471,16 +2471,16 @@ static void refresh_screen(Terminal *term, buf_T *buf)
 static void scroll_to_screen(win_T *const wp)
   FUNC_ATTR_NONNULL_ALL
 {
-  const linenr_T topline = MAX(wp->w_buffer->b_ml.ml_line_count - wp->w_view_height + 1, 1);
-  const bool topline_differs = wp->w_topline != topline;
-  if (topline_differs) {
+  const linenr_T topline = row_to_linenr(wp->w_buffer->terminal, 0);
+  const bool change_topline = wp->w_cursor.lnum >= topline && wp->w_topline != topline;
+  if (change_topline) {
     set_topline(wp, topline);
   }
   // Our topline/leftcol may scroll cursor out-of-view; update_topline/curs_columns adjusts if so.
   if (wp->w_leftcol != 0) {
     wp->w_leftcol = 0;
     curs_columns(wp, true);  // also calls update_topline
-  } else if (topline_differs) {
+  } else if (change_topline) {
     update_topline(wp);
   }
 }
@@ -2502,7 +2502,7 @@ static void adjust_topline_cursor(Terminal *term, buf_T *buf, int added)
       if (following) {
         // "Follow" the terminal output
         wp->w_cursor.lnum = ml_end;
-        set_topline(wp, MAX(wp->w_cursor.lnum - wp->w_view_height + 1, 1));
+        set_topline(wp, row_to_linenr(term, 0));
       } else {
         // Ensure valid cursor for each window displaying this terminal.
         wp->w_cursor.lnum = MIN(wp->w_cursor.lnum, ml_end);

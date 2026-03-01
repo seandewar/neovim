@@ -1413,6 +1413,7 @@ describe('float window', function()
       local expected = {
         anchor = 'NW',
         border = 'none',
+        style = '',
         col = 5,
         external = false,
         focusable = true,
@@ -1442,17 +1443,31 @@ describe('float window', function()
         )
       )
 
-      eq(
-        { external = false, focusable = true, mouse = true, hide = false, relative = '', split = 'left', width = 40, height = 6 },
-        api.nvim_win_get_config(0)
-      )
+      eq({
+        external = false,
+        focusable = true,
+        mouse = true,
+        hide = false,
+        relative = '',
+        style = '',
+        split = 'left',
+        width = 40,
+        height = 6,
+      }, api.nvim_win_get_config(0))
 
       if multigrid then
         api.nvim_win_set_config(win, { external = true, width = 10, height = 1 })
-        eq(
-          { external = true, focusable = true, mouse = true, width = 10, height = 1, relative = '', hide = false, border = 'none' },
-          api.nvim_win_get_config(win)
-        )
+        eq({
+          external = true,
+          focusable = true,
+          mouse = true,
+          width = 10,
+          height = 1,
+          relative = '',
+          style = '',
+          hide = false,
+          border = 'none',
+        }, api.nvim_win_get_config(win))
       end
     end)
 
@@ -4523,6 +4538,7 @@ describe('float window', function()
         bufpos = { 1, 32 },
         anchor = 'NW',
         border = 'none',
+        style = '',
         hide = false,
         external = false,
         col = 0,

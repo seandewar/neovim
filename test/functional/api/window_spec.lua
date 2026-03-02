@@ -2367,10 +2367,17 @@ describe('API/win', function()
     end)
 
     it('throws error when attempting to move the last non-floating window', function()
+      command('setlocal cursorline')
+      eq(1, eval('&cursorline'))
       local err = pcall_err(api.nvim_win_set_config, 0, {
         vertical = false,
+        style = 'minimal',
       })
       eq('Cannot move last non-floating window', err)
+      -- Despite an error, configs may have been merged. If so, expect changed fields to take
+      -- effect, like `style="minimal"` disabling the cursorline.
+      eq('minimal', api.nvim_win_get_config(0).style)
+      eq(0, eval('&cursorline'))
 
       local win1 = api.nvim_get_current_win()
       command('tabnew')
@@ -2495,6 +2502,12 @@ describe('API/win', function()
         "non-float with 'win' requires at least 'split' or 'vertical'",
         pcall_err(api.nvim_win_set_config, 0, { win = 0, relative = '' })
       )
+
+      -- "minimal" style takes effect immediately for a split.
+      api.nvim_set_option_value('cursorline', true, { win = win, scope = 'local' })
+      eq(true, api.nvim_get_option_value('cursorline', { win = win }))
+      api.nvim_win_set_config(win, { style = 'minimal' })
+      eq(false, api.nvim_get_option_value('cursorline', { win = win }))
     end)
 
     it('creates top-level splits', function()

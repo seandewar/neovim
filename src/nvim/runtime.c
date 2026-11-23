@@ -2071,7 +2071,7 @@ scriptitem_T *new_script_item(char *const name, scid_T *const sid_out)
   if (sid_out != NULL) {
     *sid_out = sid;
   }
-  ga_grow(&script_items, sid - script_items.ga_len);
+  ga_grow(&script_items, (int)sid - script_items.ga_len);
   while (script_items.ga_len < sid) {
     scriptitem_T *si = xcalloc(1, sizeof(scriptitem_T));
     script_items.ga_len++;
@@ -2181,7 +2181,7 @@ int do_source_str(const char *str, char *traceback_name)
 ///
 /// If a scriptitem_T was found or created "*ret_sid" is set to the SID.
 static int do_source_ext(char *const fname, const bool check_other, const int is_vimrc,
-                         int *const ret_sid, const exarg_T *const eap, const bool ex_lua,
+                         scid_T *const ret_sid, const exarg_T *const eap, const bool ex_lua,
                          const char *const str)
 {
   source_cookie_T cookie;
@@ -2222,7 +2222,7 @@ static int do_source_ext(char *const fname, const bool check_other, const int is
   }
 
   // See if we loaded this script before.
-  int sid = str != NULL ? SID_STR : find_script_by_name(fname_exp);
+  scid_T sid = str != NULL ? SID_STR : find_script_by_name(fname_exp);
   if (sid > 0 && ret_sid != NULL) {
     // Already loaded and no need to load again, return here.
     *ret_sid = sid;
@@ -2493,7 +2493,7 @@ theend:
 
 /// @param check_other  check for .vimrc and _vimrc
 /// @param is_vimrc     DOSO_ value
-int do_source(char *fname, bool check_other, int is_vimrc, int *ret_sid)
+int do_source(char *fname, bool check_other, int is_vimrc, scid_T *ret_sid)
 {
   return do_source_ext(fname, check_other, is_vimrc, ret_sid, NULL, false, NULL);
 }
@@ -2512,7 +2512,7 @@ bool script_is_lua(scid_T sid)
 
 /// Find an already loaded script "name".
 /// If found returns its script ID.  If not found returns -1.
-int find_script_by_name(char *name)
+scid_T find_script_by_name(char *name)
 {
   assert(script_items.ga_len >= 0);
   for (int sid = script_items.ga_len; sid > 0; sid--) {
@@ -2600,7 +2600,7 @@ char *get_scriptname(sctx_T script_ctx, bool *should_free)
   default: {
     char *const sname = SCRIPT_ITEM(script_ctx.sc_sid)->sn_name;
     if (sname == NULL) {
-      snprintf(IObuff, IOSIZE, _("anonymous :source (script id %d)"),
+      snprintf(IObuff, IOSIZE, _("anonymous :source (script id %" PRIdSCID ")"),
                script_ctx.sc_sid);
       return IObuff;
     }
@@ -3073,7 +3073,7 @@ bool script_autoload(const char *const name, const size_t name_len, const bool r
 
     // Try loading the package from $VIMRUNTIME/autoload/<name>.vim
     // Use "ret_sid" to avoid loading the same script again.
-    int ret_sid;
+    scid_T ret_sid;
     if (do_in_runtimepath(scriptname, DIP_START, source_callback, &ret_sid) == OK) {
       ret = true;
     }

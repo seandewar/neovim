@@ -48,7 +48,7 @@ typedef struct {
 typedef struct {
   scriptvar_T *sn_vars;         ///< stores s: variables for this script
 
-  char *sn_name;
+  char *sn_name;                ///< NULL for anonymous scripts (e.g: nvim_exec2)
   bool sn_lua;                  ///< true for a lua script
   bool sn_prof_on;              ///< true when script is/was profiled
   bool sn_pr_force;             ///< forceit: profile functions in this script

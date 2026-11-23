@@ -752,7 +752,7 @@ char *replace_termcodes(const char *const from, const size_t from_len, char **co
                                                    && strncmp(src, "<lt>", 4) != 0))) {
       // Change <SID>Func to K_SNR <script-nr> _Func.  This name is used
       // for script-local user functions.
-      // (room: 5 * 6 = 30 bytes; needed: 3 + <nr> + 1 <= 14)
+      // (room: 5 * 6 = 30 bytes; needed: 3 + <nr> + 1 <= 23)
       if (end - src >= 4 && STRNICMP(src, "<SID>", 5) == 0) {
         if (sid_arg < 0 || (sid_arg == 0 && current_sctx.sc_sid <= 0)) {
           emsg(_(e_usingsid));

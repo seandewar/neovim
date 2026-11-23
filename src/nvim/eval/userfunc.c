@@ -2123,7 +2123,7 @@ char *trans_function_name(char **pp, bool skip, int flags, funcdict_T *fdp, part
   }
 
   size_t sid_buflen = 0;
-  char sid_buf[20];
+  char sid_buf[22];
 
   // Copy the function name to allocated memory.
   // Accept <SID>name() inside a script, translate into <SNR>123_name().
@@ -2198,7 +2198,7 @@ char *get_scriptlocal_funcname(char *funcname)
     return NULL;
   }
 
-  char sid_buf[25];
+  char sid_buf[27];
   // Expand s: and <SID> prefix into <SNR>nr_<name>
   size_t sid_buflen = (size_t)snprintf(sid_buf, sizeof(sid_buf), "<SNR>%" PRIdSCID "_",
                                        current_sctx.sc_sid);

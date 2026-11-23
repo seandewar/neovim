@@ -2382,7 +2382,7 @@ void nlua_set_sctx(sctx_T *current)
     break;
   }
   char *source_path = fix_fname(info->source + 1);
-  int sid = find_script_by_name(source_path);
+  scid_T sid = find_script_by_name(source_path);
   if (sid > 0) {
     xfree(source_path);
   } else {

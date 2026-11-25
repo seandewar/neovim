@@ -2504,7 +2504,7 @@ dictitem_T *find_var_in_ht(hashtab_T *const ht, int htname, const char *const va
 
 /// Finds the dict (g:, l:, s:, …) and hashtable used for a variable.
 ///
-/// Assigns SID if s: scope is accessed from Lua or anonymous Vimscript. #15994
+/// Assigns SID if s: scope is accessed directly from Lua. #15994
 ///
 /// @param[in]  name  Variable name, possibly with scope prefix.
 /// @param[in]  name_len  Variable name length.
@@ -2567,14 +2567,16 @@ static hashtab_T *find_var_ht_dict(const char *name, const size_t name_len, cons
   } else if (*name == 'l') {  // l: local variable
     *d = get_funccal_local_dict();
   } else if (*name == 's'  // script variable
-             && (script_id_valid(current_sctx.sc_sid) || current_sctx.sc_sid == SID_STR
-                 || current_sctx.sc_sid == SID_LUA)) {
+             && (script_id_valid(current_sctx.sc_sid) || current_sctx.sc_sid == SID_LUA)) {
     // For anonymous scripts without a script item, create one so s: vars can be used. #15994
     // Try to resolve lua filename & linenr so it can be shown in last-set messages.
     nlua_set_sctx(&current_sctx);
-    scriptitem_T *si = script_item(current_sctx.sc_sid);
-    if (si == NULL) {
+    scriptitem_T *si;
+    if (current_sctx.sc_sid == SID_LUA) {
       si = new_script_item(NULL, &current_sctx.sc_sid);
+    } else {
+      // A script may have a SID but no item until its s: scope is first used.
+      si = ensure_script_item(current_sctx.sc_sid);
     }
     *d = &si->sn_vars->sv_dict;
   }

@@ -85,6 +85,10 @@ vim.api.nvim_create_autocmd('User', { pattern = 'set_mouse', callback = cb })
 coroutine.wrap(function()
   vim.o.busy = 2
 end)()
+
+local a = vim.api.nvim_exec2('function! AnonFirst()\nreturn s:value\nendfunction\nlet s:value = 1\necho expand("<SID>")', { output = true }).output
+local b = vim.api.nvim_exec2('function! AnonSecond()\nreturn s:value\nendfunction\nlet s:value = 2\necho expand("<SID>")', { output = true }).output
+vim.g.anon_sids = { a, b }
 ]=]
     )
     exec(cmd .. ' ' .. script_file)
@@ -96,6 +100,14 @@ end)()
       (cmd == 'source' or v1) and script_location or 'Lua',
       v1 and ('line %d'):format(linenr) or '(run Nvim with -V1 for more details)'
     )
+  end
+
+  local function anon_location(linenr)
+    return ('anonymous :source (script id <SID>) line %d'):format(linenr)
+  end
+
+  local function normalize_sid(result)
+    return (result:gsub('script id %d+', 'script id <SID>'))
   end
 
   local option_checks = {
@@ -113,14 +125,15 @@ end)()
 
   for _, check in ipairs(option_checks) do
     it(('for option set by %s'):format(check[1]), function()
-      local result = exec_capture((':verbose set %s?'):format(check[2]))
+      local result = normalize_sid(exec_capture((':verbose set %s?'):format(check[2])))
       eq(
         string.format(
           [[
 %s
 	Last set from %s]],
           check[3],
-          get_last_set_location(check[4])
+          (check[1] == 'nvim_exec2' or check[1] == 'vim.cmd') and anon_location(1)
+            or get_last_set_location(check[4])
         ),
         result
       )
@@ -156,7 +169,7 @@ n  \key2       * :echo "test"<CR>
   end)
 
   it('for autocmd set by nvim_exec2', function()
-    local result = exec_capture(':verbose autocmd test_group Filetype c')
+    local result = normalize_sid(exec_capture(':verbose autocmd test_group Filetype c'))
     eq(
       string.format(
         [[
@@ -164,7 +177,7 @@ n  \key2       * :echo "test"<CR>
 test_group  FileType
     c         setl cindent
 	Last set from %s]],
-        get_last_set_location(16)
+        anon_location(3)
       ),
       result
     )
@@ -186,13 +199,13 @@ test_group  FileType
   end)
 
   it('for highlight group set by nvim_exec2', function()
-    local result = exec_capture(':verbose highlight TestHL1')
+    local result = normalize_sid(exec_capture(':verbose highlight TestHL1'))
     eq(
       string.format(
         [[
 TestHL1        xxx guibg=Blue
 	Last set from %s]],
-        get_last_set_location(28)
+        anon_location(1)
       ),
       result
     )
@@ -243,7 +256,7 @@ TestHL2        xxx guibg=Green
   end)
 
   it('for function defined by nvim_exec2', function()
-    local result = exec_capture(':verbose function Close_Window')
+    local result = normalize_sid(exec_capture(':verbose function Close_Window'))
     eq(
       string.format(
         [[
@@ -251,37 +264,33 @@ TestHL2        xxx guibg=Green
 	Last set from %s
 1    wincmd -
    endfunction]],
-        get_last_set_location(34)
+        anon_location(2)
       ),
       result
     )
   end)
 
   it('for option set by nvim_exec2 with anonymous sid', function()
-    local result = exec_capture(':verbose set tw?')
-    local loc = get_last_set_location(40)
-    if loc == 'Lua (run Nvim with -V1 for more details)' then
-      loc = 'anonymous :source (script id 1) line 5'
-    end
+    local result = normalize_sid(exec_capture(':verbose set tw?'))
     eq(
       string.format(
         [[
   textwidth=80
 	Last set from %s]],
-        loc
+        anon_location(5)
       ),
       result
     )
   end)
 
   it('for option set by function in nvim_exec2', function()
-    local result = exec_capture(':verbose set list?')
+    local result = normalize_sid(exec_capture(':verbose set list?'))
     eq(
       string.format(
         [[
   list
 	Last set from %s]],
-        get_last_set_location(54)
+        anon_location(1237)
       ),
       result
     )
@@ -298,6 +307,10 @@ TestHL2        xxx guibg=Green
       ),
       result
     )
+    local sids = api.nvim_get_var('anon_sids')
+    t.neq(sids[1], sids[2])
+    eq(1, fn.AnonFirst())
+    eq(2, fn.AnonSecond())
   end)
 end
 

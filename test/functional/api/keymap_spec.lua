@@ -287,9 +287,10 @@ describe('nvim_get_keymap', function()
       endfunction
 
       nnoremap fizz :call <SID>maparg_test_function()<CR>
+      let g:maparg_sid = expand('<SID>')
     ]])
     local sid_result = api.nvim_get_keymap('n')[1]['sid']
-    eq(1, sid_result)
+    eq(tonumber(api.nvim_get_var('maparg_sid'):match('%d+')), sid_result)
     eq('testing', api.nvim_call_function('<SNR>' .. sid_result .. '_maparg_test_function', {}))
   end)
 
@@ -300,9 +301,10 @@ describe('nvim_get_keymap', function()
       endfunction
 
       nnoremap <buffer> fizz :call <SID>maparg_test_function()<CR>
+      let g:maparg_sid = expand('<SID>')
     ]])
     local sid_result = api.nvim_buf_get_keymap(0, 'n')[1]['sid']
-    eq(1, sid_result)
+    eq(tonumber(api.nvim_get_var('maparg_sid'):match('%d+')), sid_result)
     eq('testing', api.nvim_call_function('<SNR>' .. sid_result .. '_maparg_test_function', {}))
   end)
 

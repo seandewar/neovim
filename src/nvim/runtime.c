@@ -105,6 +105,8 @@ typedef kvec_t(char *) CharVec;
 #include "runtime.c.generated.h"
 
 garray_T exestack = { 0, 0, sizeof(estack_T), 50, NULL };
+
+static scid_T last_current_SID = 0;
 PMap(scid_T) script_items = MAP_INIT;
 SidVec named_sids = KV_INITIAL_VALUE;
 
@@ -2067,19 +2069,11 @@ static bool concat_continued_line(garray_T *const ga, const int init_growsize, c
 scriptitem_T *new_script_item(char *const name, scid_T *const sid_out)
   FUNC_ATTR_NONNULL_RET
 {
-  static scid_T last_current_SID = 0;
   const scid_T sid = ++last_current_SID;
   if (sid_out != NULL) {
     *sid_out = sid;
   }
-  scriptitem_T *si = xcalloc(1, sizeof(scriptitem_T));
-  pmap_put(scid_T)(&script_items, sid, si);
-
-  // Allocate the local script variables to use for this script.
-  scriptvar_T *sv = xcalloc(1, sizeof(scriptvar_T));
-  init_var_dict(&sv->sv_dict, &sv->sv_var, VAR_SCOPE);
-  si->sn_vars = sv;
-
+  scriptitem_T *si = ensure_script_item(sid);
   si->sn_name = name;
   if (name != NULL) {
     kv_push(named_sids, sid);
@@ -2090,7 +2084,26 @@ scriptitem_T *new_script_item(char *const name, scid_T *const sid_out)
 bool script_id_valid(scid_T sid)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  return sid > 0 && script_item(sid) != NULL;
+  return sid > 0 && sid <= last_current_SID;
+}
+
+/// Get the script item for script ID "sid", creating it (with its script-local
+/// variables) if needed. This is the only place that allocates script items.
+scriptitem_T *ensure_script_item(scid_T sid)
+  FUNC_ATTR_NONNULL_RET
+{
+  bool new_item;
+  scriptitem_T **ref = (scriptitem_T **)pmap_put_ref(scid_T)(&script_items, sid, NULL, &new_item);
+  if (!new_item) {
+    return *ref;
+  }
+  scriptitem_T *si = xcalloc(1, sizeof(scriptitem_T));
+  *ref = si;
+  // Allocate the local script variables to use for this script.
+  scriptvar_T *sv = xcalloc(1, sizeof(scriptvar_T));
+  init_var_dict(&sv->sv_dict, &sv->sv_var, VAR_SCOPE);
+  si->sn_vars = sv;
+  return si;
 }
 
 /// Initialization for sourcing lines from the current buffer. Reads all the
@@ -2228,7 +2241,7 @@ static int do_source_ext(char *const fname, const bool check_other, const int is
   }
 
   // See if we loaded this script before.
-  scid_T sid = str != NULL ? SID_STR : find_script_by_name(fname_exp);
+  scid_T sid = str != NULL ? 0 : find_script_by_name(fname_exp);
   if (sid > 0 && ret_sid != NULL) {
     // Already loaded and no need to load again, return here.
     *ret_sid = sid;
@@ -2352,16 +2365,14 @@ static int do_source_ext(char *const fname, const bool check_other, const int is
     if (ret_sid != NULL) {
       *ret_sid = sid;
     }
+  } else {
+    sid = ++last_current_SID;
   }
   // Sourcing a string doesn't allocate a script item immediately.
   assert((si != NULL) == (str == NULL));
 
-  // Don't change sc_sid to SID_STR when sourcing a string from a Lua script,
-  // as keeping the current sc_sid allows more useful :verbose messages.
-  if (str == NULL || !script_is_lua(current_sctx.sc_sid)) {
-    current_sctx.sc_sid = sid;
-    current_sctx.sc_lnum = 0;
-  }
+  current_sctx.sc_sid = sid;
+  current_sctx.sc_lnum = 0;
 
   // Keep the sourcing name/lnum, for recursive calls.
   estack_push(ETYPE_SCRIPT, si != NULL ? si->sn_name : fname_exp, 0);
@@ -2595,8 +2606,6 @@ char *get_scriptname(sctx_T script_ctx, bool *should_free)
   case SID_API_CLIENT:
     snprintf(IObuff, IOSIZE, _("API client (channel id %" PRIu64 ")"), script_ctx.sc_chan);
     return IObuff;
-  case SID_STR:
-    return _("anonymous :source");
   default: {
     const scriptitem_T *const si = script_item(script_ctx.sc_sid);
     char *const sname = si != NULL ? si->sn_name : NULL;

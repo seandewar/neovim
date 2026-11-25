@@ -96,28 +96,21 @@ describe('nvim_get_commands', function()
       definition = '!finger <args>',
       name = 'Finger',
       nargs = '+',
-      script_id = 1,
     })
     local cmd2 = command_info({
       bang = true,
-      definition = 'call \128\253R2_foo(<q-args>)',
       name = 'Cmd2',
       nargs = '*',
-      script_id = 2,
     })
     local cmd3 = command_info({
       bar = true,
-      definition = 'call \128\253R3_ohyeah()',
       name = 'Cmd3',
       nargs = '0',
-      script_id = 3,
     })
     local cmd4 = command_info({
-      definition = 'call \128\253R4_just_great()',
       name = 'Cmd4',
       nargs = '0',
       register = true,
-      script_id = 4,
     })
     local previewCmd = command_info({
       complete = 'customlist',
@@ -125,7 +118,6 @@ describe('nvim_get_commands', function()
       definition = '',
       name = 'PreviewCmd',
       nargs = '1',
-      script_id = 5,
     })
     local previewLuaCmd = command_info({
       -- RPC serializes Lua func as "<Lua N>" (normalized below).
@@ -147,34 +139,43 @@ describe('nvim_get_commands', function()
     })
 
     source([[
-      let s:foo = 1
       command -complete=custom,ListUsers -nargs=+ Finger !finger <args>
+      let g:command_sid = expand('<SID>')
     ]])
+    cmd1.script_id = tonumber(api.nvim_get_var('command_sid'):match('%d+'))
     eq({ Finger = cmd1 }, api.nvim_get_commands({ builtin = false }))
     command('command -nargs=1 -complete=dir -addr=arguments -count=10 TestCmd pwd <args>')
     eq({ Finger = cmd1, TestCmd = cmd0 }, api.nvim_get_commands({ builtin = false }))
 
     source([[
-      function! s:foo() abort
-      endfunction
       command -bang -nargs=* Cmd2 call <SID>foo(<q-args>)
+      let g:command_sid = expand('<SID>')
     ]])
+    cmd2.script_id = tonumber(api.nvim_get_var('command_sid'):match('%d+'))
+    cmd2.definition = ('call \128\253R%d_foo(<q-args>)'):format(cmd2.script_id)
     source([[
-      function! s:ohyeah() abort
-      endfunction
       command -bar -nargs=0 Cmd3 call <SID>ohyeah()
+      let g:command_sid = expand('<SID>')
     ]])
+    cmd3.script_id = tonumber(api.nvim_get_var('command_sid'):match('%d+'))
+    cmd3.definition = ('call \128\253R%d_ohyeah()'):format(cmd3.script_id)
     source([[
-      function! s:just_great() abort
-      endfunction
       command -register Cmd4 call <SID>just_great()
+      let g:command_sid = expand('<SID>')
     ]])
+    cmd4.script_id = tonumber(api.nvim_get_var('command_sid'):match('%d+'))
+    cmd4.definition = ('call \128\253R%d_just_great()'):format(cmd4.script_id)
     source([[
-      function! s:cpt() abort
-        return 1
-      endfunction
       command -nargs=1 -complete=customlist,s:cpt PreviewCmd
+      let g:command_sid = expand('<SID>')
     ]])
+    previewCmd.script_id = tonumber(api.nvim_get_var('command_sid'):match('%d+'))
+    t.ok(
+      cmd1.script_id < cmd2.script_id
+        and cmd2.script_id < cmd3.script_id
+        and cmd3.script_id < cmd4.script_id
+        and cmd4.script_id < previewCmd.script_id
+    )
     source([[
       lua << EOF
       vim.api.nvim_create_user_command(

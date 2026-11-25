@@ -450,6 +450,12 @@ char *deref_func_name(const char *name, int *lenp, partial_T **const partialp, b
     *partialp = NULL;
   }
 
+  // A script without an item cannot contain a Funcref variable.
+  if (*lenp > 2 && name[0] == 's' && name[1] == ':'
+      && script_id_valid(current_sctx.sc_sid) && script_item(current_sctx.sc_sid) == NULL) {
+    return (char *)name;
+  }
+
   dictitem_T *const v = find_var(name, (size_t)(*lenp), NULL, no_autoload);
   if (v == NULL) {
     return (char *)name;
@@ -646,7 +652,7 @@ static char *fname_trans_sid(const char *const name, char *const fname_buf, char
   if (!eval_fname_sid(name)) {  // "<SID>" or "s:"
     fname_buf[fname_buflen] = NUL;
   } else {
-    if (current_sctx.sc_sid <= 0) {
+    if (!script_id_valid(current_sctx.sc_sid)) {
       *error = FCERR_SCRIPT;
     } else {
       fname_buflen += (size_t)snprintf(fname_buf + fname_buflen,
@@ -2135,7 +2141,7 @@ char *trans_function_name(char **pp, bool skip, int flags, funcdict_T *fdp, part
     if ((lv.ll_exp_name != NULL && eval_fname_sid(lv.ll_exp_name))
         || eval_fname_sid(*pp)) {
       // It's "s:" or "<SID>".
-      if (current_sctx.sc_sid <= 0) {
+      if (!script_id_valid(current_sctx.sc_sid)) {
         emsg(_(e_usingsid));
         goto theend;
       }

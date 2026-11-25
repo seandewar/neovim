@@ -139,8 +139,9 @@ describe('API', function()
 
     it(':verbose set {option}?', function()
       api.nvim_exec2('set nowrap', { output = false })
+      local sid = api.nvim_get_option_info2('wrap', {}).last_set_sid
       eq(
-        { output = 'nowrap\n\tLast set from anonymous :source line 1' },
+        { output = ('nowrap\n\tLast set from anonymous :source (script id %d) line 1'):format(sid) },
         api.nvim_exec2('verbose set wrap?', { output = true })
       )
 
@@ -152,8 +153,9 @@ describe('API', function()
       ]],
         { output = false }
       )
+      sid = api.nvim_get_option_info2('wrap', {}).last_set_sid
       eq(
-        { output = 'nowrap\n\tLast set from anonymous :source (script id 1) line 2' },
+        { output = ('nowrap\n\tLast set from anonymous :source (script id %d) line 2'):format(sid) },
         api.nvim_exec2('verbose set wrap?', { output = true })
       )
     end)
@@ -243,9 +245,9 @@ describe('API', function()
         )
       )
 
-      -- Script items are created only on script var access
+      -- A SID is available before script-local variables or functions are defined.
       eq(
-        { output = '1\n0' },
+        { output = '0\n0' },
         api.nvim_exec2(
           [[
           echo expand("<SID>")->empty()
@@ -257,7 +259,7 @@ describe('API', function()
       )
 
       eq(
-        { output = '1\n0' },
+        { output = '0\n0' },
         api.nvim_exec2(
           [[
           echo expand("<SID>")->empty()
@@ -306,6 +308,104 @@ describe('API', function()
         ]]
         )
       )
+
+      api.nvim_exec2(
+        [[
+        let g:first_sid = expand('<SID>')
+        function! GetAnonymousVar() abort
+          return s:value
+        endfunction
+        function! s:Increment() abort
+          let s:value += 1
+          return s:value
+        endfunction
+        command! IncrementAnonymous let g:command_value = <SID>Increment()
+        autocmd User AnonymousTest let g:autocmd_value = s:Increment()
+        let s:value = 40
+        let s:Ref = function('tr', ['ABC', 'A', 'a'])
+        let g:funcref_value = s:Ref()
+        let g:function_value = GetAnonymousVar()
+        let g:second_sid = expand('<SID>')
+      ]],
+        {}
+      )
+      eq(40, api.nvim_get_var('function_value'))
+      eq('aBC', api.nvim_get_var('funcref_value'))
+      eq(api.nvim_get_var('first_sid'), api.nvim_get_var('second_sid'))
+      command('IncrementAnonymous')
+      command('doautocmd User AnonymousTest')
+      eq(41, api.nvim_get_var('command_value'))
+      eq(42, api.nvim_get_var('autocmd_value'))
+      eq(42, fn.GetAnonymousVar())
+      local next_sid = api.nvim_exec2('echo expand("<SID>")', { output = true }).output
+      neq(api.nvim_get_var('first_sid'), next_sid)
+      matches(
+        'Vim%(echo%):E121: Undefined variable: s:value$',
+        pcall_err(api.nvim_exec2, 'echo s:value', {})
+      )
+
+      for _, verbose in ipairs({ 0, 1 }) do
+        local result = exec_lua(
+          [=[
+          local verbose = ...
+          vim.o.verbose = verbose
+          vim.api.nvim_exec2([[
+            let g:outer_sid = expand('<SID>')
+            function! OuterValue() abort
+              return s:value
+            endfunction
+            let s:value = 123
+            let g:inner_sid = nvim_exec2('echo expand("<SID>")', {'output': v:true}).output
+            let g:restored_sid = expand('<SID>')
+          ]], {})
+          local other = vim.api.nvim_exec2('echo expand("<SID>")', { output = true }).output
+          return { vim.g.outer_sid, vim.g.inner_sid, vim.g.restored_sid, other, vim.fn.OuterValue() }
+        ]=],
+          verbose
+        )
+        eq(result[1], result[3])
+        neq(result[1], result[2])
+        neq(result[1], result[4])
+        neq(result[2], result[4])
+        eq(123, result[5])
+      end
+
+      -- Other Lua API calls do not consume SIDs unless s: storage is needed.
+      eq(
+        { 1, 2 },
+        exec_lua([[
+        vim.o.verbose = 0
+        local function sid()
+          local output = vim.api.nvim_exec2('echo expand("<SID>")', { output = true }).output
+          return tonumber(output:match('%d+'))
+        end
+        local first = sid()
+        vim.api.nvim_set_option_value('number', true, {})
+        vim.api.nvim_eval('1')
+        local second = sid()
+        assert(vim.api.nvim_call_function('eval', { 'len(s:)' }) == 0)
+        return { second - first, sid() - second }
+      ]])
+      )
+
+      if exec_lua("return pcall(require, 'ffi')") then
+        eq(
+          { 0, 20 },
+          exec_lua([[
+          local ffi = require('ffi')
+          ffi.cdef('extern struct { uint32_t buckets; uint32_t size; } script_items;')
+          local before = tonumber(ffi.C.script_items.size)
+          for _ = 1, 100 do
+            vim.api.nvim_exec2('function! s:F()\nendfunction\nlet g:snr = expand("<SID>")', {})
+          end
+          local after = tonumber(ffi.C.script_items.size)
+          for _ = 1, 20 do
+            vim.api.nvim_exec2('let s:value = 1', {})
+          end
+          return { after - before, tonumber(ffi.C.script_items.size) - after }
+        ]])
+        )
+      end
 
       -- nvim_exec2s above may have allocated anonymous script items for s: vars.
       -- They should be omitted from getscriptinfo, :scriptnames and completion listings.
@@ -4434,6 +4534,7 @@ describe('API', function()
     local fname
     local bufs
     local wins
+    local script_sid
 
     before_each(function()
       fname = tmpname()
@@ -4463,6 +4564,8 @@ describe('API', function()
 
       api.nvim_set_current_win(wins[2])
       api.nvim_exec('source ' .. fname, false)
+      script_sid = api.nvim_get_option_info2('dictionary', { scope = 'global' }).last_set_sid
+      eq(fname, fn.getscriptinfo({ sid = script_sid })[1].name)
 
       api.nvim_set_current_win(wins[1])
     end)
@@ -4510,20 +4613,20 @@ describe('API', function()
           api.nvim_set_current_win(wins[2])
           local info = api.nvim_get_option_info2(unpack(test.args))
           eq(test.linenr, info.last_set_linenr)
-          eq(test.sid, info.last_set_sid)
+          eq(test.sid == 1 and script_sid or 0, info.last_set_sid)
         end)
       end
 
       it('cross-buffer', function()
         local info = api.nvim_get_option_info2('formatprg', { buf = bufs[2] })
         eq(2, info.last_set_linenr)
-        eq(1, info.last_set_sid)
+        eq(script_sid, info.last_set_sid)
       end)
 
       it('cross-window', function()
         local info = api.nvim_get_option_info2('listchars', { win = wins[2] })
         eq(6, info.last_set_linenr)
-        eq(1, info.last_set_sid)
+        eq(script_sid, info.last_set_sid)
       end)
     end)
   end)

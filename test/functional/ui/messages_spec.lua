@@ -30,6 +30,7 @@ describe('ui/ext_messages', function()
 
   before_each(function()
     clear()
+    command('set tags=')
     screen = Screen.new(25, 5, { rgb = true, ext_messages = true, ext_popupmenu = true })
     screen:add_extra_attr_ids {
       [100] = { undercurl = true, special = Screen.colors.Red },
@@ -331,7 +332,9 @@ describe('ui/ext_messages', function()
         autocmd ExitPre pat1 foo
         autocmd ExitPre pat2 bar
       augroup END
+      let g:autocmd_sid = str2nr(matchstr(expand('<SID>'), '\d\+'))
     ]])
+    local autocmd_sid = api.nvim_get_var('autocmd_sid')
     feed(':edit! foo<CR>')
     screen:expect({
       grid = [[
@@ -373,13 +376,19 @@ describe('ui/ext_messages', function()
             { '  ' },
             { 'ExitPre', 101, 'Title' },
             {
-              '\n    pat1      foo\n\tLast set from anonymous :source line 5\n    pat2      bar\n\tLast set from anonymous :source line 6\n',
+              ('\n    pat1      foo\n\tLast set from anonymous :source (script id %d) line 5\n    pat2      bar\n\tLast set from anonymous :source (script id %d) line 6\n'):format(
+                autocmd_sid,
+                autocmd_sid
+              ),
             },
             { 'group2', 101, 'Title' },
             { '  ' },
             { 'ExitPre', 101, 'Title' },
             {
-              '\n    pat1      foo\n\tLast set from anonymous :source line 9\n    pat2      bar\n\tLast set from anonymous :source line 10',
+              ('\n    pat1      foo\n\tLast set from anonymous :source (script id %d) line 9\n    pat2      bar\n\tLast set from anonymous :source (script id %d) line 10'):format(
+                autocmd_sid,
+                autocmd_sid
+              ),
             },
           },
           kind = 'list_cmd',

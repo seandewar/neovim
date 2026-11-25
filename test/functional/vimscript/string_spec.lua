@@ -105,6 +105,7 @@ describe('string() function', function()
   describe('used to represent funcrefs', function()
     setup(function()
       source([[
+        let g:script_prefix = expand('<SID>')
         function Test1()
         endfunction
 
@@ -128,7 +129,7 @@ describe('string() function', function()
     end)
 
     it('dumps references to script functions', function()
-      eq("function('<SNR>1_Test2')", eval('string(Test2_f)'))
+      eq(("function('%sTest2')"):format(eval('g:script_prefix')), eval('string(Test2_f)'))
     end)
 
     it('dumps partials with self referencing a partial', function()
@@ -146,12 +147,13 @@ describe('string() function', function()
     end)
 
     it('dumps automatically created partials', function()
+      local prefix = eval('g:script_prefix')
       eq(
-        "function('<SNR>1_Test2', {'f': function('<SNR>1_Test2')})",
+        ("function('%sTest2', {'f': function('%sTest2')})"):format(prefix, prefix),
         eval('string({"f": Test2_f}.f)')
       )
       eq(
-        "function('<SNR>1_Test2', [1], {'f': function('<SNR>1_Test2', [1])})",
+        ("function('%sTest2', [1], {'f': function('%sTest2', [1])})"):format(prefix, prefix),
         eval('string({"f": function(Test2_f, [1])}.f)')
       )
     end)

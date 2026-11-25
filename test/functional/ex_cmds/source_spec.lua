@@ -107,7 +107,7 @@ describe(':source', function()
     command('source')
     eq('2', exec_capture('echo a'))
     eq("{'k': 'v'}", exec_capture('echo b'))
-    eq('<SNR>1_', exec_capture('echo c'))
+    matches('^<SNR>%d+_$', exec_capture('echo c'))
     eq('0zBEEFCAFE', exec_capture('echo d'))
 
     exec('set cpoptions+=C')
@@ -142,11 +142,12 @@ describe(':source', function()
     feed_command(':source')
     eq('4', exec_capture('echo a'))
     eq("{'K': 'V'}", exec_capture('echo b'))
-    eq('<SNR>1_C()', exec_capture('echo D()'))
+    local function_name = exec_capture('echo D()')
+    matches('^<SNR>%d+_C%(%)$', function_name)
 
     -- Source last line after the lines that define s:C() have been sourced
     feed_command(':$source')
-    eq('<SNR>1_C()', exec_capture('echo D()'))
+    eq(function_name, exec_capture('echo D()'))
 
     exec('set cpoptions+=C')
     matches("Vim%(let%):E723: Missing end of Dictionary '%}'", pcall_err(command, "'<,'>source"))

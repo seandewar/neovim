@@ -89,9 +89,11 @@ describe('maparg()', function()
       endfunction
 
       nnoremap fizz :call <SID>maparg_test_function()<CR>
+      let g:maparg_sid = expand('<SID>')
     ]])
-    eq(1, fn.maparg('fizz', 'n', false, true)['sid'])
-    eq('testing', api.nvim_call_function('<SNR>1_maparg_test_function', {}))
+    local sid = tonumber(eval('g:maparg_sid'):match('%d+'))
+    eq(sid, fn.maparg('fizz', 'n', false, true)['sid'])
+    eq('testing', api.nvim_call_function(('<SNR>%d_maparg_test_function'):format(sid), {}))
   end)
 
   it('works with <F12> and others', function()

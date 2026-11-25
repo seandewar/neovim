@@ -152,6 +152,7 @@ describe(':echo :echon :echomsg :echoerr', function()
   describe('used to represent funcrefs', function()
     setup(function()
       source([[
+        let g:script_prefix = expand('<SID>')
         function Test1()
         endfunction
 
@@ -181,9 +182,10 @@ describe(':echo :echon :echomsg :echoerr', function()
     end)
 
     it('dumps references to script functions', function()
-      eq('<SNR>1_Test2', eval('String(Test2_f)'))
-      eq("function('<SNR>1_Test2')", eval('StringMsg(Test2_f)'))
-      eq("function('<SNR>1_Test2')", eval('StringErr(Test2_f)'))
+      local name = eval('g:script_prefix') .. 'Test2'
+      eq(name, eval('String(Test2_f)'))
+      eq(("function('%s')"):format(name), eval('StringMsg(Test2_f)'))
+      eq(("function('%s')"):format(name), eval('StringErr(Test2_f)'))
     end)
 
     it('dump references to lambdas', function()
@@ -206,13 +208,14 @@ describe(':echo :echon :echomsg :echoerr', function()
     end)
 
     it('dumps automatically created partials', function()
+      local prefix = eval('g:script_prefix')
       assert_same_echo_dump(
-        "function('<SNR>1_Test2', {'f': function('<SNR>1_Test2')})",
+        ("function('%sTest2', {'f': function('%sTest2')})"):format(prefix, prefix),
         '{"f": Test2_f}.f',
         true
       )
       assert_same_echo_dump(
-        "function('<SNR>1_Test2', [1], {'f': function('<SNR>1_Test2', [1])})",
+        ("function('%sTest2', [1], {'f': function('%sTest2', [1])})"):format(prefix, prefix),
         '{"f": function(Test2_f, [1])}.f',
         true
       )
@@ -227,9 +230,11 @@ describe(':echo :echon :echomsg :echoerr', function()
     it('does not crash or halt when dumping partials with reference cycles in self', function()
       api.nvim_set_var('d', { v = true })
       eq(
-        dedent(
-          [[
+        (
+          dedent(
+            [[
           {'p': function('<SNR>1_Test2', {...@0}), 'f': function('<SNR>1_Test2'), 'v': v:true}]]
+          ):gsub('<SNR>1_', eval('g:script_prefix'))
         ),
         exec_capture('echo String(extend(extend(g:d, {"f": g:Test2_f}), {"p": g:d.f}))')
       )
@@ -277,9 +282,11 @@ describe(':echo :echon :echomsg :echoerr', function()
         eval('add(l, function("Test1", l))')
         eval('add(l, function("Test1", d))')
         eq(
-          dedent(
-            [=[
+          (
+            dedent(
+              [=[
           {'p': function('<SNR>1_Test2', [[[...@3], function('Test1', [[...@3]]), function('Test1', {...@0})], function('Test1', [[[...@5], function('Test1', [[...@5]]), function('Test1', {...@0})]]), function('Test1', {...@0})], {...@0}), 'f': function('<SNR>1_Test2'), 'v': v:true}]=]
+            ):gsub('<SNR>1_', eval('g:script_prefix'))
           ),
           exec_capture(
             'echo String(extend(extend(g:d, {"f": g:Test2_f}), {"p": function(g:d.f, l)}))'

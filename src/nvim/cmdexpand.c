@@ -2881,11 +2881,11 @@ static char *get_breakadd_arg(expand_T *xp FUNC_ATTR_UNUSED, int idx)
 /// ":scriptnames" command.
 static char *get_scriptnames_arg(expand_T *xp FUNC_ATTR_UNUSED, int idx)
 {
-  if (!SCRIPT_ID_VALID(idx + 1)) {
+  if (idx < 0 || (size_t)idx >= kv_size(named_sids)) {
     return NULL;
   }
 
-  scriptitem_T *si = SCRIPT_ITEM(idx + 1);
+  scriptitem_T *si = script_item(kv_A(named_sids, (size_t)idx));
   home_replace(NULL, si->sn_name, NameBuff, MAXPATHL, true);
   return NameBuff;
 }

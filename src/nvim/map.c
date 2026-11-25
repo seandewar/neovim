@@ -26,6 +26,8 @@
 #define equal_int equal_simple
 #define hash_int64_t(key) hash_uint64_t((uint64_t)key)
 #define equal_int64_t equal_simple
+#define hash_scid_T(key) hash_int64_t(key)
+#define equal_scid_T equal_simple
 
 #ifdef ARCH_64
 # define hash_ptr_t(key) hash_uint64_t((uint64_t)(key))
@@ -227,6 +229,13 @@ void mh_clear(MapHash *h)
 #include "nvim/map_value_impl.c.h"
 #undef VAL_NAME
 #define VAL_NAME(x) quasiquote(x, int64_t)
+#include "nvim/map_value_impl.c.h"
+#undef VAL_NAME
+#undef KEY_NAME
+
+#define KEY_NAME(x) x##scid_T
+#include "nvim/map_key_impl.c.h"
+#define VAL_NAME(x) quasiquote(x, ptr_t)
 #include "nvim/map_value_impl.c.h"
 #undef VAL_NAME
 #undef KEY_NAME

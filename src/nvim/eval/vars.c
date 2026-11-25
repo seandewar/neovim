@@ -258,9 +258,6 @@ const list_T *eval_msgpack_type_lists[] = {
   [kMPExt] = NULL,
 };
 
-#define SCRIPT_SV(id) (SCRIPT_ITEM(id)->sn_vars)
-#define SCRIPT_VARS(id) (SCRIPT_SV(id)->sv_dict.dv_hashtab)
-
 void evalvars_init(void)
 {
   init_var_dict(get_globvar_dict(), &globvars_var, VAR_DEF_SCOPE);
@@ -387,9 +384,10 @@ void evalvars_clear(void)
   // The scriptvar_T is cleared later in free_scriptnames(), because a
   // variable in one script might hold a reference to the whole scope of
   // another script.
-  for (int i = 1; i <= script_items.ga_len; i++) {
-    vars_clear(&SCRIPT_VARS(i));
-  }
+  scriptitem_T *si;
+  map_foreach_value(&script_items, si, {
+    vars_clear(&si->sn_vars->sv_dict.dv_hashtab);
+  });
 }
 #endif
 
@@ -407,9 +405,10 @@ bool garbage_collect_scriptvars(int64_t copyID)
 {
   bool abort = false;
 
-  for (int i = 1; i <= script_items.ga_len; i++) {
-    abort = abort || set_ref_in_ht(&SCRIPT_VARS(i), copyID, NULL);
-  }
+  scriptitem_T *si;
+  map_foreach_value(&script_items, si, {
+    abort = abort || set_ref_in_ht(&si->sn_vars->sv_dict.dv_hashtab, copyID, NULL);
+  });
 
   return abort;
 }
@@ -626,8 +625,9 @@ static void list_vim_vars(int *first)
 /// List script-local variables, if there is a script.
 static void list_script_vars(int *first)
 {
-  if (current_sctx.sc_sid > 0 && current_sctx.sc_sid <= script_items.ga_len) {
-    list_hashtable_vars(&SCRIPT_VARS(current_sctx.sc_sid), "s:", false, first);
+  scriptitem_T *si = script_item(current_sctx.sc_sid);
+  if (si != NULL) {
+    list_hashtable_vars(&si->sn_vars->sv_dict.dv_hashtab, "s:", false, first);
   }
 }
 
@@ -2462,7 +2462,7 @@ dictitem_T *find_var_in_ht(hashtab_T *const ht, int htname, const char *const va
     // Must be something like "s:", otherwise "ht" would be NULL.
     switch (htname) {
     case 's':
-      return (dictitem_T *)&SCRIPT_SV(current_sctx.sc_sid)->sv_var;
+      return (dictitem_T *)&script_item(current_sctx.sc_sid)->sn_vars->sv_var;
     case 'g':
       return (dictitem_T *)&globvars_var;
     case 'v':
@@ -2567,17 +2567,16 @@ static hashtab_T *find_var_ht_dict(const char *name, const size_t name_len, cons
   } else if (*name == 'l') {  // l: local variable
     *d = get_funccal_local_dict();
   } else if (*name == 's'  // script variable
-             && (current_sctx.sc_sid > 0 || current_sctx.sc_sid == SID_STR
-                 || current_sctx.sc_sid == SID_LUA)
-             && current_sctx.sc_sid <= script_items.ga_len) {
-    // For anonymous scripts without a script item, create one now so script vars can be used
+             && (script_id_valid(current_sctx.sc_sid) || current_sctx.sc_sid == SID_STR
+                 || current_sctx.sc_sid == SID_LUA)) {
+    // For anonymous scripts without a script item, create one so s: vars can be used. #15994
     // Try to resolve lua filename & linenr so it can be shown in last-set messages.
     nlua_set_sctx(&current_sctx);
-    if (current_sctx.sc_sid == SID_STR || current_sctx.sc_sid == SID_LUA) {
-      // Create SID if s: scope is accessed from Lua or anon Vimscript. #15994
-      new_script_item(NULL, &current_sctx.sc_sid);
+    scriptitem_T *si = script_item(current_sctx.sc_sid);
+    if (si == NULL) {
+      si = new_script_item(NULL, &current_sctx.sc_sid);
     }
-    *d = &SCRIPT_SV(current_sctx.sc_sid)->sv_dict;
+    *d = &si->sn_vars->sv_dict;
   }
 
 end:
@@ -2611,15 +2610,6 @@ char *get_var_value(const char *const name)
     return NULL;
   }
   return (char *)tv_get_string(&v->di_tv);
-}
-
-/// Allocate a new hashtab for a sourced script.  It will be used while
-/// sourcing this script and when executing functions defined in the script.
-void new_script_vars(scid_T id)
-{
-  scriptvar_T *sv = xcalloc(1, sizeof(scriptvar_T));
-  init_var_dict(&sv->sv_dict, &sv->sv_var, VAR_SCOPE);
-  SCRIPT_ITEM(id)->sn_vars = sv;
 }
 
 /// Initialize dictionary "dict" as a scope and set variable "dict_var" to

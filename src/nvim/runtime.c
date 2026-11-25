@@ -105,7 +105,8 @@ typedef kvec_t(char *) CharVec;
 #include "runtime.c.generated.h"
 
 garray_T exestack = { 0, 0, sizeof(estack_T), 50, NULL };
-garray_T script_items = { 0, 0, sizeof(scriptitem_T *), 20, NULL };
+PMap(scid_T) script_items = MAP_INIT;
+SidVec named_sids = KV_INITIAL_VALUE;
 
 /// The names of packages that once were loaded are remembered.
 static garray_T ga_loaded = { 0, 0, sizeof(char *), 4, NULL };
@@ -178,8 +179,8 @@ char *estack_sfile(estack_arg_T which)
         const sctx_T *const def_ctx = (entry->es_type == ETYPE_UFUNC
                                        ? &entry->es_info.ufunc->uf_script_ctx
                                        : &entry->es_info.aucmd->script_ctx);
-        const char *const name = def_ctx->sc_sid > 0 ? SCRIPT_ITEM(def_ctx->sc_sid)->sn_name : NULL;
-        return name != NULL ? xstrdup(name) : NULL;
+        const scriptitem_T *const si = script_item(def_ctx->sc_sid);
+        return si != NULL && si->sn_name != NULL ? xstrdup(si->sn_name) : NULL;
       } else if (entry->es_type == ETYPE_SCRIPT) {
         return xstrdup(entry->es_name);
       }
@@ -2057,7 +2058,7 @@ static bool concat_continued_line(garray_T *const ga, const int init_growsize, c
   return true;
 }
 
-/// Create a new script item and allocate script-local vars. @see new_script_vars
+/// Create a new script item and allocate script-local vars.
 ///
 /// @param  name  File name of the script. NULL for anonymous :source.
 /// @param[out]  sid_out  SID of the new item.
@@ -2071,20 +2072,25 @@ scriptitem_T *new_script_item(char *const name, scid_T *const sid_out)
   if (sid_out != NULL) {
     *sid_out = sid;
   }
-  ga_grow(&script_items, (int)sid - script_items.ga_len);
-  while (script_items.ga_len < sid) {
-    scriptitem_T *si = xcalloc(1, sizeof(scriptitem_T));
-    script_items.ga_len++;
-    SCRIPT_ITEM(script_items.ga_len) = si;
-    si->sn_name = NULL;
+  scriptitem_T *si = xcalloc(1, sizeof(scriptitem_T));
+  pmap_put(scid_T)(&script_items, sid, si);
 
-    // Allocate the local script variables to use for this script.
-    new_script_vars(script_items.ga_len);
+  // Allocate the local script variables to use for this script.
+  scriptvar_T *sv = xcalloc(1, sizeof(scriptvar_T));
+  init_var_dict(&sv->sv_dict, &sv->sv_var, VAR_SCOPE);
+  si->sn_vars = sv;
 
-    si->sn_prof_on = false;
+  si->sn_name = name;
+  if (name != NULL) {
+    kv_push(named_sids, sid);
   }
-  SCRIPT_ITEM(sid)->sn_name = name;
-  return SCRIPT_ITEM(sid);
+  return si;
+}
+
+bool script_id_valid(scid_T sid)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return sid > 0 && script_item(sid) != NULL;
 }
 
 /// Initialization for sourcing lines from the current buffer. Reads all the
@@ -2337,7 +2343,7 @@ static int do_source_ext(char *const fname, const bool check_other, const int is
 
   if (sid > 0) {
     // loading the same script again
-    si = SCRIPT_ITEM(sid);
+    si = script_item(sid);
   } else if (str == NULL) {
     // It's new, generate a new SID.
     si = new_script_item(fname_exp, &sid);
@@ -2425,8 +2431,6 @@ static int do_source_ext(char *const fname, const bool check_other, const int is
   retval = OK;
 
   if (l_do_profiling == PROF_YES && si != NULL) {
-    // Get "si" again, "script_items" may have been reallocated.
-    si = SCRIPT_ITEM(current_sctx.sc_sid);
     if (si->sn_prof_on) {
       si->sn_pr_start = profile_end(si->sn_pr_start);
       si->sn_pr_start = profile_sub_wait(wait_start, si->sn_pr_start);
@@ -2504,25 +2508,22 @@ bool script_is_lua(scid_T sid)
   if (sid == SID_LUA) {
     return true;
   }
-  if (!SCRIPT_ID_VALID(sid)) {
-    return false;
-  }
-  return SCRIPT_ITEM(sid)->sn_lua;
+  scriptitem_T *si = script_item(sid);
+  return si != NULL && si->sn_lua;
 }
 
 /// Find an already loaded script "name".
 /// If found returns its script ID.  If not found returns -1.
 scid_T find_script_by_name(char *name)
 {
-  assert(script_items.ga_len >= 0);
-  for (int sid = script_items.ga_len; sid > 0; sid--) {
+  for (size_t idx = kv_size(named_sids); idx-- > 0;) {
     // We used to check inode here, but that doesn't work:
     // - If a script is edited and written, it may get a different
     //   inode number, even though to the user it is the same script.
     // - If a script is deleted and another script is written, with a
     //   different name, the inode may be re-used.
-    scriptitem_T *si = SCRIPT_ITEM(sid);
-    if (si->sn_name != NULL && path_equal(si->sn_name, name, kPathCmpLiteral)) {
+    scid_T sid = kv_A(named_sids, idx);
+    if (path_equal(script_item(sid)->sn_name, name, kPathCmpLiteral)) {
       return sid;
     }
   }
@@ -2534,12 +2535,12 @@ void ex_scriptnames(exarg_T *eap)
 {
   if (eap->addr_count > 0 || *eap->arg != NUL) {
     // :script {scriptId}: edit the script
-    if (eap->addr_count > 0
-        && (!SCRIPT_ID_VALID(eap->line2) || SCRIPT_ITEM(eap->line2)->sn_name == NULL)) {
+    scriptitem_T *si = eap->addr_count > 0 ? script_item(eap->line2) : NULL;
+    if (eap->addr_count > 0 && (si == NULL || si->sn_name == NULL)) {
       emsg(_(e_invarg));
     } else {
       if (eap->addr_count > 0) {
-        eap->arg = SCRIPT_ITEM(eap->line2)->sn_name;
+        eap->arg = si->sn_name;
       } else {
         expand_env(eap->arg, NameBuff, MAXPATHL);
         eap->arg = NameBuff;
@@ -2551,17 +2552,16 @@ void ex_scriptnames(exarg_T *eap)
   }
 
   msg_ext_set_kind("list_cmd");
-  for (int i = 1; i <= script_items.ga_len && !got_int; i++) {
-    if (SCRIPT_ITEM(i)->sn_name != NULL) {
-      home_replace(NULL, SCRIPT_ITEM(i)->sn_name, NameBuff, MAXPATHL, true);
-      vim_snprintf(IObuff, IOSIZE, "%3d: %s", i, NameBuff);
-      if (!message_filtered(IObuff)) {
-        if (msg_col > 0) {
-          msg_putchar('\n');
-        }
-        msg_outtrans(IObuff, 0, false);
-        line_breakcheck();
+  for (size_t idx = 0; idx < kv_size(named_sids) && !got_int; idx++) {
+    scid_T sid = kv_A(named_sids, idx);
+    home_replace(NULL, script_item(sid)->sn_name, NameBuff, MAXPATHL, true);
+    vim_snprintf(IObuff, IOSIZE, "%3" PRIdSCID ": %s", sid, NameBuff);
+    if (!message_filtered(IObuff)) {
+      if (msg_col > 0) {
+        msg_putchar('\n');
       }
+      msg_outtrans(IObuff, 0, false);
+      line_breakcheck();
     }
   }
 }
@@ -2598,7 +2598,8 @@ char *get_scriptname(sctx_T script_ctx, bool *should_free)
   case SID_STR:
     return _("anonymous :source");
   default: {
-    char *const sname = SCRIPT_ITEM(script_ctx.sc_sid)->sn_name;
+    const scriptitem_T *const si = script_item(script_ctx.sc_sid);
+    char *const sname = si != NULL ? si->sn_name : NULL;
     if (sname == NULL) {
       snprintf(IObuff, IOSIZE, _("anonymous :source (script id %" PRIdSCID ")"),
                script_ctx.sc_sid);
@@ -2619,17 +2620,16 @@ void free_scriptnames(void)
 {
   profile_reset();
 
-# define FREE_SCRIPTNAME(item) \
-  do { \
-    scriptitem_T *_si = *(item); \
-    /* the variables themselves are cleared in evalvars_clear() */ \
-    xfree(_si->sn_vars); \
-    xfree(_si->sn_name); \
-    ga_clear(&_si->sn_prl_ga); \
-    xfree(_si); \
-  } while (0) \
-
-  GA_DEEP_CLEAR(&script_items, scriptitem_T *, FREE_SCRIPTNAME);
+  scriptitem_T *si;
+  map_foreach_value(&script_items, si, {
+    // the variables themselves are cleared in evalvars_clear()
+    xfree(si->sn_vars);
+    xfree(si->sn_name);
+    ga_clear(&si->sn_prl_ga);
+    xfree(si);
+  });
+  kv_destroy(named_sids);
+  map_destroy(scid_T, &script_items);
 }
 #endif
 
@@ -2669,7 +2669,7 @@ static list_T *get_script_local_funcs(scid_T sid)
 /// "getscriptinfo()" function
 void f_getscriptinfo(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  tv_list_alloc_ret(rettv, script_items.ga_len);
+  tv_list_alloc_ret(rettv, (ptrdiff_t)kv_size(named_sids));
 
   if (tv_check_for_opt_dict_arg(argvars, 0) == FAIL) {
     return;
@@ -2708,37 +2708,44 @@ void f_getscriptinfo(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
     }
   }
 
-  for (varnumber_T i = sid > 0 ? sid : 1;
-       (i == sid || sid <= 0) && i <= script_items.ga_len; i++) {
-    scriptitem_T *si = SCRIPT_ITEM(i);
-
-    if (sid <= 0 && si->sn_name == NULL) {
-      continue;
-    }
-
-    if (filterpat && !vim_regexec(&regmatch, si->sn_name, 0)) {
-      continue;
-    }
-
-    dict_T *d = tv_dict_alloc();
-    tv_list_append_dict(l, d);
-    tv_dict_add_str(d, S_LEN("name"), si->sn_name);
-    tv_dict_add_nr(d, S_LEN("sid"), i);
-    tv_dict_add_nr(d, S_LEN("version"), 1);
-    // Vim9 autoload script (:h vim9-autoload), not applicable to Nvim.
-    tv_dict_add_bool(d, S_LEN("autoload"), false);
-
+  if (sid > 0) {
     // When a script ID is specified, return information about only the
     // specified script, and add the script-local variables and functions.
-    if (sid > 0) {
-      dict_T *var_dict = tv_dict_copy(NULL, &si->sn_vars->sv_dict, true, get_copyID());
-      tv_dict_add_dict(d, S_LEN("variables"), var_dict);
-      tv_dict_add_list(d, S_LEN("functions"), get_script_local_funcs((scid_T)sid));
+    append_script_info(l, sid, NULL, true);
+  } else {
+    for (size_t i = 0; i < kv_size(named_sids); i++) {
+      append_script_info(l, kv_A(named_sids, i), filterpat ? &regmatch : NULL, false);
     }
   }
 
   vim_regfree(regmatch.regprog);
   xfree(pat);
+}
+
+static void append_script_info(list_T *l, scid_T sid, regmatch_T *regmatch, bool details)
+  FUNC_ATTR_NONNULL_ARG(1)
+{
+  scriptitem_T *si = script_item(sid);
+  if (si == NULL) {
+    return;
+  }
+  if (regmatch != NULL && !vim_regexec(regmatch, si->sn_name, 0)) {
+    return;
+  }
+
+  dict_T *d = tv_dict_alloc();
+  tv_list_append_dict(l, d);
+  tv_dict_add_str(d, S_LEN("name"), si->sn_name);
+  tv_dict_add_nr(d, S_LEN("sid"), sid);
+  tv_dict_add_nr(d, S_LEN("version"), 1);
+  // Vim9 autoload script (:h vim9-autoload), not applicable to Nvim.
+  tv_dict_add_bool(d, S_LEN("autoload"), false);
+
+  if (details) {
+    dict_T *var_dict = tv_dict_copy(NULL, &si->sn_vars->sv_dict, true, get_copyID());
+    tv_dict_add_dict(d, S_LEN("variables"), var_dict);
+    tv_dict_add_list(d, S_LEN("functions"), get_script_local_funcs(sid));
+  }
 }
 
 /// Get one full line from a sourced file.

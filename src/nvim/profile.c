@@ -230,8 +230,8 @@ static char *profile_fname = NULL;
 void profile_reset(void)
 {
   // Reset sourced files.
-  for (int id = 1; id <= script_items.ga_len; id++) {
-    scriptitem_T *si = SCRIPT_ITEM(id);
+  for (size_t idx = 0; idx < kv_size(named_sids); idx++) {
+    scriptitem_T *si = script_item(kv_A(named_sids, idx));
     if (si->sn_prof_on) {
       si->sn_prof_on = false;
       si->sn_pr_force = false;
@@ -402,10 +402,8 @@ void prof_input_end(void)
 bool prof_def_func(void)
   FUNC_ATTR_PURE
 {
-  if (current_sctx.sc_sid > 0) {
-    return SCRIPT_ITEM(current_sctx.sc_sid)->sn_pr_force;
-  }
-  return false;
+  scriptitem_T *si = script_item(current_sctx.sc_sid);
+  return si != NULL && si->sn_pr_force;
 }
 
 /// Print the count and times for one function or function line.
@@ -674,11 +672,9 @@ void profile_init(scriptitem_T *si)
 /// @param tm  place to store wait time
 void script_prof_save(proftime_T *tm)
 {
-  if (current_sctx.sc_sid > 0 && current_sctx.sc_sid <= script_items.ga_len) {
-    scriptitem_T *si = SCRIPT_ITEM(current_sctx.sc_sid);
-    if (si->sn_prof_on && si->sn_pr_nest++ == 0) {
-      si->sn_pr_child = profile_start();
-    }
+  scriptitem_T *si = script_item(current_sctx.sc_sid);
+  if (si != NULL && si->sn_prof_on && si->sn_pr_nest++ == 0) {
+    si->sn_pr_child = profile_start();
   }
   *tm = profile_get_wait();
 }
@@ -686,11 +682,11 @@ void script_prof_save(proftime_T *tm)
 /// Count time spent in children after invoking another script or function.
 void script_prof_restore(const proftime_T *tm)
 {
-  if (!SCRIPT_ID_VALID(current_sctx.sc_sid)) {
+  scriptitem_T *si = script_item(current_sctx.sc_sid);
+  if (si == NULL) {
     return;
   }
 
-  scriptitem_T *si = SCRIPT_ITEM(current_sctx.sc_sid);
   if (si->sn_prof_on && --si->sn_pr_nest == 0) {
     si->sn_pr_child = profile_end(si->sn_pr_child);
     // don't count wait time
@@ -703,10 +699,8 @@ void script_prof_restore(const proftime_T *tm)
 /// Dump the profiling results for all scripts in file "fd".
 static void script_dump_profile(FILE *fd)
 {
-  sn_prl_T *pp;
-
-  for (int id = 1; id <= script_items.ga_len; id++) {
-    scriptitem_T *si = SCRIPT_ITEM(id);
+  for (size_t idx = 0; idx < kv_size(named_sids); idx++) {
+    scriptitem_T *si = script_item(kv_A(named_sids, idx));
     if (si->sn_prof_on) {
       fprintf(fd, "SCRIPT  %s\n", si->sn_name);
       if (si->sn_pr_count == 1) {
@@ -744,6 +738,8 @@ static void script_dump_profile(FILE *fd)
             IObuff[n] = NL;
             IObuff[n + 1] = NUL;
           }
+
+          sn_prl_T *pp;
           if (i < si->sn_prl_ga.ga_len
               && (pp = &PRL_ITEM(si, i))->snp_count > 0) {
             fprintf(fd, "%5d ", pp->snp_count);
@@ -788,10 +784,10 @@ void profile_dump(void)
 /// until later and we need to store the time now.
 void script_line_start(void)
 {
-  if (current_sctx.sc_sid <= 0 || current_sctx.sc_sid > script_items.ga_len) {
+  scriptitem_T *si = script_item(current_sctx.sc_sid);
+  if (si == NULL) {
     return;
   }
-  scriptitem_T *si = SCRIPT_ITEM(current_sctx.sc_sid);
   if (si->sn_prof_on && SOURCING_LNUM >= 1) {
     // Grow the array before starting the timer, so that the time spent
     // here isn't counted.
@@ -816,10 +812,10 @@ void script_line_start(void)
 /// Called when actually executing a function line.
 void script_line_exec(void)
 {
-  if (current_sctx.sc_sid <= 0 || current_sctx.sc_sid > script_items.ga_len) {
+  scriptitem_T *si = script_item(current_sctx.sc_sid);
+  if (si == NULL) {
     return;
   }
-  scriptitem_T *si = SCRIPT_ITEM(current_sctx.sc_sid);
   if (si->sn_prof_on && si->sn_prl_idx >= 0) {
     si->sn_prl_execed = true;
   }
@@ -828,10 +824,10 @@ void script_line_exec(void)
 /// Called when done with a function line.
 void script_line_end(void)
 {
-  if (current_sctx.sc_sid <= 0 || current_sctx.sc_sid > script_items.ga_len) {
+  scriptitem_T *si = script_item(current_sctx.sc_sid);
+  if (si == NULL) {
     return;
   }
-  scriptitem_T *si = SCRIPT_ITEM(current_sctx.sc_sid);
   if (si->sn_prof_on && si->sn_prl_idx >= 0
       && si->sn_prl_idx < si->sn_prl_ga.ga_len) {
     if (si->sn_prl_execed) {

@@ -2,11 +2,13 @@
 
 #include <stddef.h>  // IWYU pragma: keep
 
+#include "klib/kvec.h"
 #include "nvim/api/private/defs.h"  // IWYU pragma: keep
 #include "nvim/cmdexpand_defs.h"  // IWYU pragma: keep
 #include "nvim/eval/typval_defs.h"  // IWYU pragma: keep
 #include "nvim/ex_cmds_defs.h"  // IWYU pragma: keep
 #include "nvim/garray_defs.h"
+#include "nvim/map_defs.h"
 #include "nvim/option_defs.h"  // IWYU pragma: keep
 #include "nvim/pos_defs.h"  // IWYU pragma: keep
 #include "nvim/runtime_defs.h"  // IWYU pragma: keep
@@ -21,10 +23,12 @@ extern garray_T exestack;
 /// line number in the message source or zero
 #define SOURCING_LNUM (((estack_T *)exestack.ga_data)[exestack.ga_len - 1].es_lnum)
 
-/// Growarray to store info about already sourced scripts.
-extern garray_T script_items;
-#define SCRIPT_ITEM(id) (((scriptitem_T **)script_items.ga_data)[(id) - 1])
-#define SCRIPT_ID_VALID(id) ((id) > 0 && (id) <= script_items.ga_len)
+typedef kvec_t(scid_T) SidVec;
+
+/// Maps a script ID to its script item. Owns all items, iteration order is unspecified.
+extern PMap(scid_T) script_items;
+/// Sorted script IDs of named (file/buffer) scripts.
+extern SidVec named_sids;
 
 /// last argument for do_source()
 enum {
@@ -61,3 +65,11 @@ enum {
 #endif
 
 #include "runtime.h.generated.h"
+#include "runtime.h.inline.generated.h"
+
+/// @return allocated script item for a script ID, NULL if none or invalid SID.
+static inline scriptitem_T *script_item(scid_T sid)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return pmap_get(scid_T)(&script_items, sid);
+}

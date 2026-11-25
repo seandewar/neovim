@@ -6,6 +6,7 @@
 
 #include "nvim/api/private/defs.h"
 #include "nvim/assert_defs.h"
+#include "nvim/eval/typval_defs.h"
 #include "nvim/highlight_defs.h"
 #include "nvim/statusline_defs.h"
 #include "nvim/types_defs.h"
@@ -150,6 +151,7 @@ KEY_DECLS(path_t)
 KEY_DECLS(ptr_t)
 KEY_DECLS(uint64_t)
 KEY_DECLS(int64_t)
+KEY_DECLS(scid_T)
 KEY_DECLS(uint32_t)
 KEY_DECLS(String)
 KEY_DECLS(HlEntry)
@@ -164,6 +166,7 @@ MAP_DECLS(uint64_t, ptr_t)
 MAP_DECLS(uint64_t, int)
 MAP_DECLS(int64_t, int64_t)
 MAP_DECLS(int64_t, ptr_t)
+MAP_DECLS(scid_T, ptr_t)
 MAP_DECLS(uint32_t, uint32_t)
 MAP_DECLS(String, int)
 MAP_DECLS(int, String)

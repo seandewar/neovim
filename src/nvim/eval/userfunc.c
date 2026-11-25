@@ -2193,7 +2193,7 @@ char *get_scriptlocal_funcname(char *funcname)
     return NULL;
   }
 
-  if (!SCRIPT_ID_VALID(current_sctx.sc_sid)) {
+  if (!script_id_valid(current_sctx.sc_sid)) {
     emsg(_(e_usingsid));
     return NULL;
   }

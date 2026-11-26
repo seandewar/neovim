@@ -270,15 +270,17 @@ describe('API', function()
       )
 
       -- nvim_exec2 script items have no name; :scriptnames/expand('<script>') shouldn't crash.
-      local anon_sid = api
+      local anon_sid = tonumber(api
         .nvim_exec2(
           [[
+          func s:flobby()
+          endfunction
           let s:x = 1
           echo expand('<SID>')
         ]],
           { output = true }
         ).output
-        :match('<SNR>(%d+)_')
+        :match('<SNR>(%d+)_'))
       eq('Vim(scriptnames):E474: Invalid argument', pcall_err(command, anon_sid .. 'scriptnames'))
 
       matches(
@@ -304,6 +306,23 @@ describe('API', function()
         ]]
         )
       )
+
+      -- nvim_exec2s above may have allocated anonymous script items for s: vars.
+      -- They should be omitted from getscriptinfo, :scriptnames and completion listings.
+      eq(0, #fn.getscriptinfo())
+      eq('', exec_capture('scriptnames'))
+      eq({}, fn.getcompletion('scriptnames ', 'cmdline'))
+      -- But can be seen by getscriptinfo with sid set.
+      eq({
+        {
+          autoload = false,
+          functions = { ('<SNR>%d_flobby'):format(anon_sid) },
+          name = '',
+          sid = anon_sid,
+          variables = { x = 1 },
+          version = 1,
+        },
+      }, fn.getscriptinfo({ sid = anon_sid }))
     end)
 
     it('non-ASCII input', function()

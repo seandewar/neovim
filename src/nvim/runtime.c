@@ -2712,7 +2712,7 @@ void f_getscriptinfo(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
        (i == sid || sid <= 0) && i <= script_items.ga_len; i++) {
     scriptitem_T *si = SCRIPT_ITEM(i);
 
-    if (si->sn_name == NULL) {
+    if (sid <= 0 && si->sn_name == NULL) {
       continue;
     }
 
